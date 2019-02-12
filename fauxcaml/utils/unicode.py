@@ -1,0 +1,16 @@
+GREEK_LOWER = "α β γ δ ε ζ η θ ι κ λ μ ν ξ ο π ρ σ τ υ φ χ ψ ω".split()
+GREEK_UPPER = "Α Β Γ Δ Ε Ζ Η Θ Ι Κ Λ Μ Ν Ξ Ο Π Ρ Σ Τ Υ Φ Χ Ψ Ω".split()
+ARROW = "→"
+MAPS_TO = "↦"
+CROSS = "×"
+ANGLE_BRACKETS = ("⟨", "⟩")
+ELEM = "∈"
+FOR_ALL = "∀"
+THERE_EXISTS = "∃"
+CONJUNCTION = "∧"
+DISJUNCTION = "∨"
+NEGATION = "¬"
+BIDIRECTION = "↔"
+IMPLICATION = "→"
+EQUIVALENCE = "≡"
+ENTAILMENT = "⊨"
