@@ -1,3 +1,5 @@
+import typing
+
 from fauxcaml.utils import instance
 from fauxcaml.utils import unicode
 
@@ -106,3 +108,9 @@ class Bool(Poly):
 @instance
 class Unit(Poly):
     SIZE = 0
+
+
+# These are cast because PyCharm can't typecheck my `instance` decorator.
+Int = typing.cast(Int, Int)
+Bool = typing.cast(Bool, Bool)
+Unit = typing.cast(Unit, Unit)

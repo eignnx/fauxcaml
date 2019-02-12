@@ -1,17 +1,21 @@
 from __future__ import annotations
 
+import functools
 import typing
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from fauxcaml.code_gen import gen_ctx, ir
-from fauxcaml.semantics import check, typ
-from fauxcaml import utils
+from fauxcaml.code_gen import gen_ctx
+from fauxcaml.code_gen import ir
+from fauxcaml.semantics import check
+from fauxcaml.semantics import typ
+from fauxcaml.semantics import unifier_set
 
 
 class AstNode(ABC):
     def __init__(self):
-        self._type = None
+        self._type: typ.Type = None
+        self._unifiers: unifier_set.UnifierSet = None
 
     @abstractmethod
     def infer_type(self, checker: check.Checker) -> typ.Type:
@@ -21,14 +25,42 @@ class AstNode(ABC):
     def code_gen(self, ctx: gen_ctx.CodeGenContext) -> ir.Value:
         pass
 
+    @staticmethod
+    def cache_type(fn: typing.Callable[[AstNode, check.Checker], typ.Type]):
+        """
+        Decorator for use on `AstNode.infer_type`. It stores the return value
+        of `infer_type` in the field `self._type`, and stores the `Checker`'s
+        unifier set under `self._unifiers` so that when the property
+        `self.type` is accessed, `self` can lookup the (potentially non-
+        concretized) type with `self._unifiers.concretize`.
+        """
+        @functools.wraps(fn)
+        def new_fn(self, checker: check.Checker) -> typ.Type:
+
+            # First initialize the `_unifier` field. This is necessary for
+            # `syntax.Const` objects' `infer_type` method, which immediately
+            # calls the `self.type` property.
+            self._unifiers = checker.unifiers
+
+            # Now call the wrapped function.
+            ret = fn(self, checker)
+
+            # Then cache the returned value.
+            self._type = ret
+
+            # Finally, actually return it so we maintain the interface.
+            return ret
+
+        return new_fn
+
     @property
     def type(self) -> typ.Type:
         """
         Returns the cached type inferred for this ast node. Must be called
         AFTER calling `infer_type` on the instance.
         """
-        if hasattr(self, "_type") and self._type is not None:
-            return self._type
+        if self._type is not None and self._unifiers is not None:
+            return self._unifiers.concretize(self._type)
         else:
             cls = self.__class__.__name__
             msg = f"The attribute {cls}.type is not initialized until after " \
@@ -48,7 +80,7 @@ class Ident(Value):
     """
     name: str
 
-    @utils.cache_in_attr("_type")
+    @AstNode.cache_type
     def infer_type(self, checker: check.Checker) -> typ.Type:
         return checker.duplicate_type(checker.type_env[self])
 
@@ -69,8 +101,9 @@ class Const(Value):
     1, true, -4.21983, point { x=1, y=2 }
     """
     value: object
-    _type: typ.Type = field(init=True)  # `_` ensures no collision with superclass property
+    _type: typ.Type  # `_` ensures no collision with superclass property
 
+    @AstNode.cache_type
     def infer_type(self, checker: check.Checker) -> typ.Type:
         return self.type  # Note: calls superclass property
 
@@ -89,7 +122,7 @@ class Lambda(AstNode):
     param: Ident
     body: AstNode
 
-    @utils.cache_in_attr("_type")
+    @AstNode.cache_type
     def infer_type(self, checker: check.Checker) -> typ.Type:
 
         # In a new scope, infer the type of the body.
@@ -118,7 +151,7 @@ class Call(AstNode):
     fn: AstNode
     arg: AstNode
 
-    @utils.cache_in_attr("_type")
+    @AstNode.cache_type
     def infer_type(self, checker: check.Checker) -> typ.Type:
 
         # Get best guess as to the type of `self.arg`.
@@ -160,7 +193,7 @@ class If(AstNode):
     yes: AstNode
     no: AstNode
 
-    @utils.cache_in_attr("_type")
+    @AstNode.cache_type
     def infer_type(self, checker: check.Checker) -> typ.Type:
         pred_type = self.pred.infer_type(checker)
         checker.unify(pred_type, typ.Bool)
@@ -211,7 +244,7 @@ class Let(AstNode):
     right: AstNode
     body: AstNode
 
-    @utils.cache_in_attr("_type")
+    @AstNode.cache_type
     def infer_type(self, checker: check.Checker) -> typ.Type:
 
         # Scope the `left = right` binding.
