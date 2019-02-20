@@ -173,14 +173,14 @@ class Call(AstNode):
     def code_gen(self, ctx: gen_ctx.CodeGenContext) -> ir.Value:
 
         # Generate code for function and arg.
-        fn_label = typing.cast(ir.Label, self.fn.code_gen(ctx))
+        fn_id = self.fn.code_gen(ctx)
         arg_tmp = self.arg.code_gen(ctx)
 
         # Create a new temporary for the return value.
         ret = ctx.new_temp(self.type)
 
         # Generate code for the call.
-        ctx.emit(ir.Call(ret, fn_label, arg_tmp))
+        ctx.emit(ir.Call(ret, fn_id, arg_tmp))
         return ret
 
 

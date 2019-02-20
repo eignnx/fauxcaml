@@ -100,7 +100,7 @@ class IfFalse(Instr):
 @dataclass
 class Call(Instr):
     res: Addr
-    fn: Label
+    fn: Addr  # Label (maybe in deeper ir)
     arg: Value
 
 
