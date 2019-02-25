@@ -45,7 +45,7 @@ def test_lambda():
 
 
 def test_lambda_zero():
-    fn: Lambda = parsing.parse("fn x => zero x")
+    fn: Lambda = parsing.parse("fun x -> zero x")
     checker = check.Checker()
     fn_type = fn.infer_type(checker)
     assert checker.concretize(fn_type) == Fn(Int, Bool)
@@ -74,11 +74,8 @@ def test_instantiation_call():
 
 def test_simple_let():
     let: Let = parsing.parse("""
-        let
-          val x = 3
-        in
-          x
-        end
+        let x = 3 in
+        x
     """)
 
     checker = check.Checker()
@@ -88,7 +85,7 @@ def test_simple_let():
 
 def test_bad_application():
     fn = parsing.parse("""
-        fn f => pair (f 3) (f true)
+        fun f -> pair (f 3) (f true)
     """)
 
     checker = check.Checker()
@@ -98,11 +95,8 @@ def test_bad_application():
 
 def test_complex_let():
     let = parsing.parse("""
-        let
-          val f = fn a => a
-        in
-          pair (f 3) (f true)
-        end
+        let f = fun a -> a in
+        (f 3, f true)
     """)
 
     checker = check.Checker()
@@ -148,11 +142,8 @@ def test_length_fn():
 def test_parser_let():
     checker = check.Checker()
     let = parsing.parse("""
-        let
-          val f = fn x => x
-        in
-          pair (f 3) (f true)
-        end
+        let f = fun x -> x in
+        pair (f 3) (f true)
     """)
     inferred = let.infer_type(checker)
     assert checker.concretize(inferred) == Tuple(Int, Bool)

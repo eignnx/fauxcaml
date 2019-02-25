@@ -1,5 +1,5 @@
 from fauxcaml.parsing import parse
-from fauxcaml.semantics.syntax import Ident, Const, Lambda, Call, Let, If
+from fauxcaml.semantics.syntax import Ident, Const, Lambda, Call, Let, If, TupleLit
 from fauxcaml.semantics.typ import Int, Bool
 
 
@@ -20,28 +20,20 @@ def test_if_stmt():
 
 def test_fun_decl_in_let():
     fun_decl = parse("""
-        let
-          fun f x y z = 1
-        in
-          f
-        end
+        let f x y z = 1 in
+        f
     """)
 
     nested_lambda = parse("""
-        let
-          val f = fn x => fn y => fn z => 1
-        in
-          f
-        end
+        let f = fun x -> fun y -> fun z -> 1 in
+        f
     """)
 
     assert fun_decl == nested_lambda
 
 
-
-
 def test_lambda():
-    parsed_fn = parse("fn x => zero x")
+    parsed_fn = parse("fun x -> zero x")
     built_fn = Lambda(Ident("x"), Call(Ident("zero"), Ident("x")))
     assert parsed_fn == built_fn
 
@@ -59,11 +51,8 @@ def test_curried_fn_call():
 
 def test_complex_let():
     parsed_let = parse("""
-        let
-          val f = fn a => a
-        in
-          pair (f 3) (f true)
-        end
+        let f = fun a -> a in
+        pair (f 3) (f true)
     """)
 
     f = Ident("f")
@@ -81,3 +70,22 @@ def test_complex_let():
     built_let = Let(f, fn, pair_call)
 
     assert parsed_let == built_let
+
+
+def test_tuple_lit():
+    actual = parse("""
+        (1, true, 1234, (100, false))
+    """)
+
+    expected = TupleLit(
+        Const(1, Int),
+        Const(True, Bool),
+        Const(1234, Int),
+        TupleLit(
+            Const(100, Int),
+            Const(False, Bool)
+        )
+    )
+
+    assert actual == expected
+

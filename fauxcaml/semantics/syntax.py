@@ -4,12 +4,14 @@ import functools
 import typing
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import Any, Generator
 
 from fauxcaml.hir import gen_ctx
 from fauxcaml.hir import hir
 from fauxcaml.semantics import check
 from fauxcaml.semantics import typ
 from fauxcaml.semantics import unifier_set
+from fauxcaml.semantics.typ import Type
 
 
 class AstNode(ABC):
@@ -285,3 +287,20 @@ class Let(AstNode):
         ctx.emit(hir.Store(ret, body_tmp))
 
         return ret
+
+
+@dataclass(eq=True)
+class TupleLit(AstNode):
+    vals: typing.Tuple[AstNode, ...]
+
+    def __init__(self, *vals):
+        super().__init__()
+        self.vals = vals
+
+    def infer_type(self, checker: check.Checker) -> typ.Type:
+        components = (v.infer_type(checker) for v in self.vals)
+        return typ.Tuple(*components)
+
+    def code_gen(self, ctx: gen_ctx.CodeGenContext) -> hir.Value:
+        raise NotImplementedError
+

@@ -16,11 +16,8 @@ def code_gen(src: str) -> gen_ctx.CodeGenContext:
 
 def test_let():
     ctx = code_gen("""
-        let
-            val x = 12
-        in
-            x
-        end
+        let x = 12 in
+        x
     """)
 
     assert ctx.current_fn.body == [

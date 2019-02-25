@@ -7,11 +7,13 @@ from fauxcaml.parsing import lexer
 pg = rply.ParserGenerator(
     lexer.all_tokens,
     precedence=[
-        ("left", ["FN", "ROCKET"]),
+        ("left", ["FUN", "ROCKET"]),
         ("left", ["IF", "THEN", "ELSE"]),
         ("left", ["INT_LIT", "BOOL_LIT", "IDENT"]),
-        ("left", ["VAL", "FUN"]),
-        ("left", ["LET", "EQ", "IN", "END"]),
+        ("left", ["LET", "REC", "EQ", "IN"]),
+        ("left", ["infix_operator"]),
+        ("left", ["PLUS", "MINUS"]),
+        ("left", ["STAR", "SLASH"]),
         ("left", ["LPAREN", "RPAREN"]),
         ("left", ["application"]),
     ],
@@ -24,27 +26,34 @@ def if_expr(s):
     return syntax.If(s[1], s[3], s[5])
 
 
-@pg.production("expr : LET decl IN expr END")
+@pg.production("expr : LET REC decl IN expr")
 def let_expr(s):
     decl = s[1]
     return syntax.Let(decl["lhs"], decl["rhs"], s[3])
 
 
-@pg.production("decl : VAL IDENT EQ expr")
+# TODO: Impl type checking for non-rec let exprs.
+@pg.production("expr : LET decl IN expr")
+def let_expr(s):
+    decl = s[1]
+    return syntax.Let(decl["lhs"], decl["rhs"], s[3])
+
+
+@pg.production("decl : IDENT EQ expr")
 def val_decl(s):
     return {
-        "lhs": syntax.Ident(s[1].value),
-        "rhs": s[3],
+        "lhs": syntax.Ident(s[0].value),
+        "rhs": s[2],
     }
 
 
-@pg.production("decl : FUN IDENT params EQ expr")
+@pg.production("decl : IDENT params EQ expr")
 def fun_decl(s):
-    params = s[2]
-    body = s[4]
+    params = s[1]
+    body = s[3]
     fn = utils.foldr(syntax.Lambda, params + [body])
     return {
-        "lhs": syntax.Ident(s[1].value),
+        "lhs": syntax.Ident(s[0].value),
         "rhs": fn,
     }
 
@@ -59,7 +68,7 @@ def params_multi(s):
     return s[0] + [syntax.Ident(s[1].value)]
 
 
-@pg.production("expr : FN IDENT ROCKET expr")
+@pg.production("expr : FUN IDENT ROCKET expr")
 def fn_expr(s):
     param = syntax.Ident(s[1].value)
     return syntax.Lambda(param, s[3])
@@ -85,6 +94,21 @@ def bool_lit_expr(s):
     return syntax.Const(value, typ.Bool)
 
 
+@pg.production("expr : LPAREN tuple_comps RPAREN")
+def tuple_expr(s):
+    return syntax.TupleLit(*s[1])
+
+
+@pg.production("tuple_comps : expr COMMA tuple_comps")
+def tuple_components_multi(s):
+    return (s[0], *s[2])
+
+
+@pg.production("tuple_comps : expr COMMA expr")
+def tuple_components_two(s):
+    return (s[0], s[2])
+
+
 @pg.production("expr : IDENT")
 def ident_expr(s):
     return syntax.Ident(s[0].value)
@@ -95,15 +119,30 @@ def paren_expr(s):
     return s[1]
 
 
+@pg.production("expr : expr PLUS expr")
+@pg.production("expr : expr MINUS expr")
+@pg.production("expr : expr STAR expr")
+@pg.production("expr : expr SLASH expr")
+@pg.production("expr : expr EQ expr", precedence="infix_operator")
+def bin_op_expr(s):
+    ident = syntax.Ident(s[1].value)
+    tup = syntax.TupleLit(s[0], s[2])
+    return syntax.Call(ident, tup)
+
+
 parser = pg.build()
 
 if __name__ == '__main__':
     def parse(txt):
         return parser.parse(lexer.lexer.lex(txt))
 
-    from fauxcaml.semantics.src import Checker
-    checker = Checker()
-    code = "let val f = fn a => a in pair (f true) (f 13) end"
+    from fauxcaml.semantics import check
+    checker = check.Checker()
+    code = """
+    let f = fun a -> a in
+    (f true, f 13)
+    """
     ast = parse(code)
     print(ast)
     ast.infer_type(checker)
+    print(ast.type)
