@@ -5,8 +5,8 @@ import typing
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from fauxcaml.code_gen import gen_ctx
-from fauxcaml.code_gen import ir
+from fauxcaml.hir import gen_ctx
+from fauxcaml.hir import hir
 from fauxcaml.semantics import check
 from fauxcaml.semantics import typ
 from fauxcaml.semantics import unifier_set
@@ -22,7 +22,7 @@ class AstNode(ABC):
         pass
 
     @abstractmethod
-    def code_gen(self, ctx: gen_ctx.CodeGenContext) -> ir.Value:
+    def code_gen(self, ctx: gen_ctx.CodeGenContext) -> hir.Value:
         pass
 
     @staticmethod
@@ -84,8 +84,8 @@ class Ident(Value):
     def infer_type(self, checker: check.Checker) -> typ.Type:
         return checker.duplicate_type(checker.type_env[self])
 
-    def code_gen(self, ctx: gen_ctx.CodeGenContext) -> ir.Value:
-        return ir.Ident(self.name, self.type)
+    def code_gen(self, ctx: gen_ctx.CodeGenContext) -> hir.Value:
+        return hir.Ident(self.name, self.type)
 
     def __str__(self):
         return self.name
@@ -107,8 +107,8 @@ class Const(Value):
     def infer_type(self, checker: check.Checker) -> typ.Type:
         return self.type  # Note: calls superclass property
 
-    def code_gen(self, ctx: gen_ctx.CodeGenContext) -> ir.Value:
-        return ir.Const(self.value, self.type)
+    def code_gen(self, ctx: gen_ctx.CodeGenContext) -> hir.Value:
+        return hir.Const(self.value, self.type)
 
     def __str__(self):
         return str(self.value)
@@ -137,7 +137,7 @@ class Lambda(AstNode):
 
         return typ.Fn(arg_type, body_type)
 
-    def code_gen(self, ctx: gen_ctx.CodeGenContext) -> ir.Value:
+    def code_gen(self, ctx: gen_ctx.CodeGenContext) -> hir.Value:
         with ctx.define_fn(self.param.name, self.type) as fn_label:
             self.body.code_gen(ctx)
         return fn_label
@@ -170,7 +170,7 @@ class Call(AstNode):
         # current root.
         return checker.unifiers.concretize(beta)
 
-    def code_gen(self, ctx: gen_ctx.CodeGenContext) -> ir.Value:
+    def code_gen(self, ctx: gen_ctx.CodeGenContext) -> hir.Value:
 
         # Generate code for function and arg.
         fn_id = self.fn.code_gen(ctx)
@@ -180,7 +180,7 @@ class Call(AstNode):
         ret = ctx.new_temp(self.type)
 
         # Generate code for the call.
-        ctx.emit(ir.Call(ret, fn_id, arg_tmp))
+        ctx.emit(hir.Call(ret, fn_id, arg_tmp))
         return ret
 
 
@@ -204,7 +204,7 @@ class If(AstNode):
 
         return checker.unifiers.concretize(yes_type)
 
-    def code_gen(self, ctx: gen_ctx.CodeGenContext) -> ir.Value:
+    def code_gen(self, ctx: gen_ctx.CodeGenContext) -> hir.Value:
 
         # Setup a temporary for the return value of the expression.
         ret = ctx.new_temp(self.type)
@@ -217,17 +217,17 @@ class If(AstNode):
         end_lbl = ctx.new_label()
 
         # Emit the conditional jump instr.
-        ctx.emit(ir.IfFalse(pred_tmp, else_lbl))
+        ctx.emit(hir.IfFalse(pred_tmp, else_lbl))
 
         # Generate the yes branch, then add a "goto end".
         yes_ret = self.yes.code_gen(ctx)
-        ctx.emit(ir.Store(ret, yes_ret))
-        ctx.emit(ir.Goto(end_lbl))
+        ctx.emit(hir.Store(ret, yes_ret))
+        ctx.emit(hir.Goto(end_lbl))
 
         # Generate the else branch
         ctx.emit(else_lbl)
         no_ret = self.no.code_gen(ctx)
-        ctx.emit(ir.Store(ret, no_ret))
+        ctx.emit(hir.Store(ret, no_ret))
 
         # Specify the end of the if statement
         ctx.emit(end_lbl)
@@ -268,20 +268,20 @@ class Let(AstNode):
             # With the environment set up, now the body can be typechecked.
             return self.body.infer_type(checker)
 
-    def code_gen(self, ctx: gen_ctx.CodeGenContext) -> ir.Value:
+    def code_gen(self, ctx: gen_ctx.CodeGenContext) -> hir.Value:
 
         # First generate the right hand side of the binding.
         right_tmp = self.right.code_gen(ctx)
         left_tmp = self.left.code_gen(ctx)
-        left_tmp = typing.cast(ir.Ident, left_tmp)  # Cast to `ir.Ident` from `ir.Value`.
+        left_tmp = typing.cast(hir.Ident, left_tmp)  # Cast to `hir.Ident` from `hir.Value`.
 
         # Emit the binding `left = right`.
-        ctx.emit(ir.Store(left_tmp, right_tmp))
+        ctx.emit(hir.Store(left_tmp, right_tmp))
 
         ret = ctx.new_temp(self.type)  # TODO: Optimize this away? Only need one return temporary?
 
         # Generate code for the body, then save the result in ret.
         body_tmp = self.body.code_gen(ctx)
-        ctx.emit(ir.Store(ret, body_tmp))
+        ctx.emit(hir.Store(ret, body_tmp))
 
         return ret

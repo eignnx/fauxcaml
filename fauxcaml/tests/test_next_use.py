@@ -1,6 +1,6 @@
 from typing import List
 
-from fauxcaml.code_gen.ir import *
+from fauxcaml.hir.hir import *
 
 
 def get_program():

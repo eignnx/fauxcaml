@@ -1,5 +1,5 @@
-from fauxcaml.code_gen import gen_ctx
-from fauxcaml.code_gen import ir
+from fauxcaml.hir import gen_ctx
+from fauxcaml.hir import hir
 from fauxcaml import parsing
 from fauxcaml.semantics import check
 from fauxcaml.semantics import typ
@@ -24,8 +24,8 @@ def test_let():
     """)
 
     assert ctx.current_fn.body == [
-        ir.Store(ir.Ident("x", typ.Int), ir.Const(12, typ.Int)),
-        ir.Store(ir.Temp(0, typ.Int), ir.Ident("x", typ.Int))
+        hir.Store(hir.Ident("x", typ.Int), hir.Const(12, typ.Int)),
+        hir.Store(hir.Temp(0, typ.Int), hir.Ident("x", typ.Int))
     ]
 
 
@@ -35,23 +35,23 @@ def test_if():
     """)
 
     assert ctx.current_fn.body == [
-        ir.IfFalse(ir.Const(True, typ.Bool), ir.Label(1)),
-        ir.Store(ir.Temp(0, typ.Int), ir.Const(12, typ.Int)),
-        ir.Goto(ir.Label(2)),
-        ir.Label(1),  # Else
-        ir.Store(ir.Temp(0, typ.Int), ir.Const(56, typ.Int)),
-        ir.Label(2)  # End
+        hir.IfFalse(hir.Const(True, typ.Bool), hir.Label(1)),
+        hir.Store(hir.Temp(0, typ.Int), hir.Const(12, typ.Int)),
+        hir.Goto(hir.Label(2)),
+        hir.Label(1),  # Else
+        hir.Store(hir.Temp(0, typ.Int), hir.Const(56, typ.Int)),
+        hir.Label(2)  # End
     ]
 
 
 def test_call():
     ctx = code_gen("succ 12")
 
-    succ = ir.Ident(
+    succ = hir.Ident(
         "succ",
         typ.Fn(typ.Int, typ.Int)
     )
 
     assert ctx.current_fn.body == [
-        ir.Call(ir.Temp(0, typ.Int), succ, ir.Const(12, typ.Int))
+        hir.Call(hir.Temp(0, typ.Int), succ, hir.Const(12, typ.Int))
     ]

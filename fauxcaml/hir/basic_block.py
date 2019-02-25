@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import List
 
-from fauxcaml.code_gen.ir import Instr
+from fauxcaml.hir.hir import Instr
 
 
 class BasicBlock:
