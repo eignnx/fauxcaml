@@ -14,16 +14,25 @@ class ToNasm(ABC):
         pass
 
     @staticmethod
-    def annotate(tag):
+    def annotate(tag, **attrs):
         """
         A decorator to put on top of `to_nasm` definitions. Will wrap the output
         nasm code with opening and closing tag comments.
         """
         def decorator(f):
-            def new_f(*args, **kwargs):
+            def new_f(self, *args, **kwargs):
+
+                # noinspection PyShadowingNames
+                attrs_fmt = ", ".join(
+                    f"{prop}=\"{eval(expr, globals(), {'self': self})}\""
+                    for prop, expr in attrs.items()
+                )
+
+                space = " " if attrs_fmt else ""
+
                 return "\n".join([
-                    f"; <{tag}>",
-                    f(*args, **kwargs),
+                    f"; <{tag}{space}{attrs_fmt}>",
+                    f(self, *args, **kwargs),
                     f"; </{tag}>",
                 ])
             return new_f
@@ -126,30 +135,69 @@ class I64(Literal):
 @dataclass
 class GetElementPtr(Instr):
     """
-    Equivalent to `*(self.tuple_ptr + self.offset)` in C. Assumes result is a
-    64-bit value.
+    Equivalent to:
+
+    ```c
+    *(u_int64 *)(
+        ((char *) self.tuple_ptr) + self.index * self.stride
+    )
+    ```
+
+    TODO: Assumes result is a 64-bit value.
+    TODO: `self.index` currently can't be set by runtime value. (Maybe ok if no arrays, only lists?)
     """
     ptr: Temp64
-    offset: int
+    index: int
+    stride: int
     res: Optional[Temp64] = None
 
-    @ToNasm.annotate("GetElementPtr")
+    @ToNasm.annotate("GetElementPtr", stride="self.stride")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
+        offset = self.stride * self.index
         return "\n".join([
             f"mov rax, {self.ptr.to_nasm(ctx)}",
-            f"mov rax, [rax{self.offset:+}]",
+            f"mov rax, [rax{offset:+}]",
         ] + ([
             f"mov {self.res.to_nasm(ctx)}, rax"
         ] if self.res is not None else []))
 
 
 @dataclass
-class EnvLookup(GetElementPtr):
+class SetElementPtr(Instr):
+    ptr: Temp64
+    index: int
+    stride: int
+    value: Value
 
-    def __init__(self, ptr: Temp64, offset: int, res: Optional[Temp64] = None):
-        # Skip the fn ptr (label). Assumes all env elements are 8 bytes.
-        offset = 8 * offset + 8
-        super().__init__(ptr, offset, res)
+    @ToNasm.annotate("SetElementPtr", stride="self.stride")
+    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
+        offset = self.stride * self.index
+        return "\n".join([
+            f"mov rax, {self.ptr.to_nasm(ctx)}",
+            f"mov r8, {self.value.to_nasm(ctx)}",
+            f"mov [rax{offset:+}], r8",
+        ])
+
+
+@dataclass
+class EnvLookup(Instr):
+    index: int
+    res: Optional[Temp64] = None
+
+    @ToNasm.annotate("EnvLookup", index="self.index")
+    def to_nasm(self, ctx: gen_ctx.NasmGenCtx):
+        gep = GetElementPtr(
+            ptr=ctx.current_fn.env,
+
+            # Skip the fn ptr (label).
+            index=self.index + 8,
+
+            # Assumes all env elements are 8 bytes.
+            stride=8,
+            res=self.res
+        )
+
+        return gep.to_nasm(ctx)
 
 
 @dataclass
@@ -177,8 +225,9 @@ class CreateClosure(Instr):
     fn_lbl: LabelRef
     captures: List[Value]
     ret: Optional[Temp64] = None
+    recursive: bool = False
 
-    @ToNasm.annotate("CreateClosure")
+    @ToNasm.annotate("CreateClosure", recursive="self.recursive")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
 
         # The size of a closure is the sum of the sizes of the captured
@@ -211,14 +260,22 @@ class CreateClosure(Instr):
 
             # Store the captured value in the closure struct.
             asm.append(
-                f"mov QWORD [r8+{offset}], rax"
+                f"mov QWORD [r8{offset:+}], rax"
             )
 
             # Increment the offset by the size of the thing that was stored.
             offset += val.size()
 
+        # If the function is recursive, the pointer to the closure must be
+        # stored in the environment too.
+        if self.recursive:
+            asm.append(
+                f"mov [r8{offset:+}], r8"
+            )
+            offset += 8
+
         if self.captures:
-            asm.append("; <ConstructEnvironment>")
+            asm.append("; </ConstructEnvironment>")
 
         # Move the ptr to the closure back into `rax`.
         asm.append(
@@ -279,7 +336,9 @@ class FnDef(ToNasm):
             self.label.as_instr().to_nasm(ctx),
 
             f"enter {self.local_alloca_size()}, 0"
-        ] + [instr.to_nasm(ctx) for instr in self.body] + [
+        ] + [
+            instr.to_nasm(ctx) for instr in self.body
+        ] + [
             # Deallocate all the locals.
             f"leave",
 
@@ -305,3 +364,38 @@ class Comment(Instr):
 
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
         return f";;; {self.text}"
+
+
+@dataclass
+class IfFalse(Instr):
+    cond: Temp64
+    label: Label
+
+    @ToNasm.annotate("IfFalse")
+    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
+        return "\n".join([
+            f"mov rax, {self.cond.to_nasm(ctx)}",
+            f"mov rflags, rax",
+            f"jnz {self.label.as_instr().to_nasm(ctx)}",
+        ])
+
+
+@dataclass
+class Goto(Instr):
+    label: Label
+
+    @ToNasm.annotate("Goto")
+    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
+        return f"jmp {self.label.as_instr().to_nasm(ctx)}"
+
+
+@dataclass
+class Return(Instr):
+    value: Value
+
+    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
+        return "\n".join([
+            f"mov rax, {self.value.to_nasm(ctx)}",
+            ctx.get_epilogue()
+        ])
+

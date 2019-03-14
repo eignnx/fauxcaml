@@ -1,5 +1,7 @@
 import subprocess
 
+import pytest
+
 from fauxcaml.lir import gen_ctx, lir, intrinsics
 
 ASM_FILE_NAME = "/tmp/fauxcaml.asm"
@@ -23,8 +25,7 @@ def run(exe_name=EXE_FILE_NAME):
 
 
 def assert_assembles(ctx: gen_ctx.NasmGenCtx):
-    res = assemble(ctx)
-    assert res.returncode == 0
+    assert assemble(ctx).returncode == 0, "Failed to assemble with nasm!"
 
 
 def assert_main_returns(ctx, expected_ret_code=0):
@@ -73,7 +74,7 @@ def test_adder_factory():
     with ctx.inside_new_fn_def("$adder$closure") as (adder_closure_lbl, y):
         x = ctx.new_temp64()
         ctx.add_instrs([
-            lir.EnvLookup(ctx.current_fn.env, 0, x),
+            lir.EnvLookup(0, x),
             intrinsics.Add(x, y)
         ])
 
@@ -115,3 +116,71 @@ def test_arithmetic_intrinsics():
     ])
 
     assert_main_returns(ctx, expected)
+
+
+def test_iterative_fibonacci():
+    ctx = gen_ctx.NasmGenCtx()
+
+    with ctx.inside_new_fn_def("$iter") as (iter_lbl, tup):
+        i = ctx.new_temp64()
+        acc = ctx.new_temp64()
+        env_n = ctx.new_temp64()
+        cond = ctx.new_temp64()
+
+        i_plus_1 = ctx.new_temp64()
+        i_times_acc = ctx.new_temp64()
+        env_iter = ctx.new_temp64()
+        next_tup = ctx.new_temp64()
+
+        ret = ctx.new_temp64()
+
+        _else = ctx.new_label("_else")
+        end_if = ctx.new_label("end_if")
+
+        ctx.add_instrs([
+            lir.GetElementPtr(tup, 0, 8, i),
+            lir.GetElementPtr(tup, 1, 8, acc),
+            lir.EnvLookup(0, env_n),
+            intrinsics.EqI64(i, env_n, cond),
+            lir.IfFalse(cond, _else),
+            *[
+                intrinsics.Mul(i, acc, ret),
+                lir.Goto(end_if)
+            ],
+            _else.as_instr(),
+            *[
+                intrinsics.Add(i, lir.I64(1), i_plus_1),
+                intrinsics.Mul(i, acc, i_times_acc),
+                intrinsics.CreateTuple([i_plus_1, i_times_acc], next_tup),
+                lir.EnvLookup(1, env_iter),
+                lir.CallClosure(env_iter, next_tup, ret)
+            ],
+            end_if.as_instr(),
+            lir.Return(ret)
+        ])
+
+    with ctx.inside_new_fn_def("$fact") as (fact_lbl, n):
+        iter = ctx.new_temp64()
+        t0 = ctx.new_temp64()
+        ctx.add_instrs([
+            lir.CreateClosure(iter_lbl, [n], iter, recursive=True),
+            intrinsics.CreateTuple([
+                lir.I64(0),
+                lir.I64(1),
+            ], t0),
+            lir.CallClosure(iter, t0)
+        ])
+
+    fact = ctx.new_temp64()
+    t0 = ctx.new_temp64()
+
+    ctx.add_instrs([
+        lir.CreateClosure(fact_lbl, [], fact),
+        lir.CallClosure(fact, lir.I64(5), t0),
+        lir.Return(t0)
+    ])
+
+    assert_main_returns(ctx, 120)
+
+
+

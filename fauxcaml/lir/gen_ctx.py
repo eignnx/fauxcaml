@@ -76,3 +76,11 @@ class NasmGenCtx:
             asm.append("")
             asm.append(fn_def.to_nasm(self))
 
+    def get_epilogue(self) -> str:
+        return "\n".join([
+            # Deallocate all the locals.
+            f"leave",
+
+            # After returning, deallocate the argument passed in.
+            f"ret {self.current_fn.param.size()}"
+        ])

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, List
 
 from fauxcaml.lir import lir, gen_ctx
 from fauxcaml.semantics import typ
@@ -19,6 +19,28 @@ class IntrinsicCall(lir.Instr, ABC):
 
 
 @dataclass
+class CreateTuple(IntrinsicCall):
+    values: List[lir.Value]
+    ret: Optional[lir.Temp64] = None
+
+    @lir.ToNasm.annotate("CreateTuple", arity="len(self.values)")
+    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
+        return "\n".join([
+            f"mov rdi, {len(self.values) * 8}",
+            f"call malloc",
+            f"mov {self.ret.to_nasm(ctx)}, rax",
+        ] + [
+            lir.SetElementPtr(
+                ptr=self.ret,
+                index=i,
+                stride=8,
+                value=value
+            ).to_nasm(ctx)
+            for i, value in enumerate(self.values)
+        ])
+
+
+@dataclass
 class AddSub(IntrinsicCall):
     op: str
     arg1: lir.Value
@@ -30,6 +52,7 @@ class AddSub(IntrinsicCall):
     def __post_init__(self):
         assert self.op in {"add", "sub"}
 
+    @lir.ToNasm.annotate("AddSub", operation="self.op")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
         asm = [
             f"mov rax, {self.arg1.to_nasm(ctx)}",
@@ -63,7 +86,10 @@ class MulDivMod(IntrinsicCall):
     # Optionally store result in temp in addition to `rax`.
     res: Optional[lir.Temp] = None
 
-    @lir.ToNasm.annotate("MulDivMod")
+    def __post_init__(self):
+        assert self.op in {"mul", "div", "mod"}
+
+    @lir.ToNasm.annotate("MulDivMod", operation="self.op")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
 
         instr = {
@@ -103,3 +129,19 @@ def Div(arg1: lir.Value, arg2: lir.Value, res: Optional[lir.Temp] = None) -> Mul
 def Mod(arg1: lir.Value, arg2: lir.Value, res: Optional[lir.Temp] = None) -> MulDivMod:
     return MulDivMod("mod", arg1, arg2, res)
 
+
+@dataclass
+class EqI64(IntrinsicCall):
+    arg1: lir.Temp64
+    arg2: lir.Temp64
+    ret: Optional[lir.Temp64] = None
+
+    @lir.ToNasm.annotate("EqI64")
+    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
+        return "\n".join([
+            f"mov rax, {self.arg1.to_nasm(ctx)}",
+            f"cmp rax, {self.arg2.to_nasm(ctx)}",
+            f"mov rax, zf",
+        ] + ([
+            f"mov {self.ret.to_nasm(ctx)}, rax"
+        ] if self.ret is not None else []))
