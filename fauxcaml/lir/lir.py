@@ -146,13 +146,16 @@ class GetElementPtr(Instr):
     TODO: Assumes result is a 64-bit value.
     TODO: `self.index` currently can't be set by runtime value. (Maybe ok if no arrays, only lists?)
     """
-    ptr: Temp64
+    ptr: Temp
     index: int
     stride: int
     res: Optional[Temp64] = None
 
     @ToNasm.annotate("GetElementPtr", stride="self.stride")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
+        if self.ptr.size() == 0:
+            raise ValueError("Cannot perform GetElementPtr on zero-sized temporary!")
+
         offset = self.stride * self.index
         return "\n".join([
             f"mov rax, {self.ptr.to_nasm(ctx)}",
@@ -190,7 +193,7 @@ class EnvLookup(Instr):
             ptr=ctx.current_fn.env,
 
             # Skip the fn ptr (label).
-            index=self.index + 8,
+            index=self.index + 1,
 
             # Assumes all env elements are 8 bytes.
             stride=8,
@@ -310,7 +313,7 @@ ENV_ID = -2
 class FnDef(ToNasm):
     label: Label
     param: Temp = field(default_factory=param_factory(PARAM_ID))
-    env: Temp64 = field(default_factory=param_factory(ENV_ID))
+    env: Temp = field(default_factory=param_factory(ENV_ID))
     body: List[Instr] = field(default_factory=list)
 
     locals: Dict[Temp, int] = field(default_factory=dict)
@@ -329,24 +332,28 @@ class FnDef(ToNasm):
             if local not in [self.param, self.env]
         )
 
-    @ToNasm.annotate("FnDef")
-    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
-        asm = [
-            # Emit the label at the top of the function.
-            self.label.as_instr().to_nasm(ctx),
-
-            f"enter {self.local_alloca_size()}, 0"
-        ] + [
-            instr.to_nasm(ctx) for instr in self.body
-        ] + [
+    def get_epilogue(self) -> str:
+        return "\n".join([
             # Deallocate all the locals.
             f"leave",
 
             # After returning, deallocate the argument passed in.
-            f"ret {self.param.size()}"
-        ]
+            f"ret {self.param.size() + self.env.size()}"
+        ])
 
-        return "\n".join(asm)
+    @ToNasm.annotate("FnDef")
+    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
+        return "\n".join([
+            # Emit the label at the top of the function.
+            self.label.as_instr().to_nasm(ctx),
+
+            # Allocate space for local variables.
+            f"enter {self.local_alloca_size()}, 0"
+        ] + [
+            instr.to_nasm(ctx) for instr in self.body
+        ] + [
+            self.get_epilogue()
+        ])
 
     def new_temp64(self) -> Temp64:
         t = Temp64(self.next_temp_id)
@@ -375,8 +382,8 @@ class IfFalse(Instr):
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
         return "\n".join([
             f"mov rax, {self.cond.to_nasm(ctx)}",
-            f"mov rflags, rax",
-            f"jnz {self.label.as_instr().to_nasm(ctx)}",
+            f"test al, al",
+            f"je {self.label.as_value().to_nasm(ctx)}",
         ])
 
 
@@ -386,13 +393,14 @@ class Goto(Instr):
 
     @ToNasm.annotate("Goto")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
-        return f"jmp {self.label.as_instr().to_nasm(ctx)}"
+        return f"jmp {self.label.as_value().to_nasm(ctx)}"
 
 
 @dataclass
 class Return(Instr):
     value: Value
 
+    @ToNasm.annotate("Return")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
         return "\n".join([
             f"mov rax, {self.value.to_nasm(ctx)}",

@@ -16,7 +16,8 @@ class NasmGenCtx:
     def create_main_fn_def(self):
         lbl = self.new_label("main")
         param = lir.Temp0()
-        return lir.FnDef(lbl, param)
+        env = lir.Temp0()
+        return lir.FnDef(lbl, param, env)
 
     def add_instr(self, instr: lir.Instr):
         self.current_fn.body.append(instr)
@@ -77,10 +78,4 @@ class NasmGenCtx:
             asm.append(fn_def.to_nasm(self))
 
     def get_epilogue(self) -> str:
-        return "\n".join([
-            # Deallocate all the locals.
-            f"leave",
-
-            # After returning, deallocate the argument passed in.
-            f"ret {self.current_fn.param.size()}"
-        ])
+        return self.current_fn.get_epilogue()

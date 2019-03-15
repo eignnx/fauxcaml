@@ -141,7 +141,7 @@ class EqI64(IntrinsicCall):
         return "\n".join([
             f"mov rax, {self.arg1.to_nasm(ctx)}",
             f"cmp rax, {self.arg2.to_nasm(ctx)}",
-            f"mov rax, zf",
+            f"sete al",
         ] + ([
             f"mov {self.ret.to_nasm(ctx)}, rax"
         ] if self.ret is not None else []))
