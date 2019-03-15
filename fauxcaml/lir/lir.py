@@ -8,7 +8,7 @@ from typing import Optional, List, Tuple, ClassVar, Dict
 from fauxcaml.lir import gen_ctx
 
 
-class ToNasm(ABC):
+class ToTgt(ABC):
 
     @abstractmethod
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
@@ -25,15 +25,15 @@ class ToNasm(ABC):
             def new_f(self, *args, **kwargs):
 
                 # noinspection PyShadowingNames
-                attrs_fmt = ", ".join(
+                props = ", ".join(
                     f"{prop}=\"{eval(expr, globals(), {'self': self})}\""
                     for prop, expr in attrs.items()
                 )
 
-                space = " " if attrs_fmt else ""
+                space = " " if props else ""
 
                 return [
-                    f"; <{tag}{space}{attrs_fmt}>",
+                    f"; <{tag}{space}{props}>",
                     *f(self, *args, **kwargs),
                     f"; </{tag}>",
                 ]
@@ -41,14 +41,14 @@ class ToNasm(ABC):
         return decorator
 
 
-class ToNasmVal(ABC):
+class ToTgtVal(ABC):
 
     @abstractmethod
     def to_nasm_val(self, ctx: gen_ctx.NasmGenCtx) -> str:
         pass
 
 
-class Value(ToNasmVal, ABC):
+class Value(ToTgtVal, ABC):
     SIZE = None
 
     def size(self) -> int:
@@ -64,7 +64,7 @@ class Static(Value):
         return ""
 
 
-class Instr(ToNasm, ABC):
+class Instr(ToTgt, ABC):
     pass
 
 
@@ -160,7 +160,7 @@ class GetElementPtr(Instr):
     stride: int
     res: Optional[Temp64] = None
 
-    @ToNasm.annotate("GetElementPtr", stride="self.stride")
+    @ToTgt.annotate("GetElementPtr", stride="self.stride")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
         if self.ptr.size() == 0:
             raise ValueError("Cannot perform GetElementPtr on zero-sized temporary!")
@@ -181,7 +181,7 @@ class SetElementPtr(Instr):
     stride: int
     value: Value
 
-    @ToNasm.annotate("SetElementPtr", stride="self.stride")
+    @ToTgt.annotate("SetElementPtr", stride="self.stride")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
         offset = self.stride * self.index
         return [
@@ -196,7 +196,7 @@ class EnvLookup(Instr):
     index: int
     res: Optional[Temp64] = None
 
-    @ToNasm.annotate("EnvLookup", index="self.index")
+    @ToTgt.annotate("EnvLookup", index="self.index")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
         return GetElementPtr(
             ptr=ctx.current_fn.env,
@@ -216,7 +216,7 @@ class CallClosure(Instr):
     arg: Value
     ret: Optional[Temp64] = None  # If `None`, no return value (Unit)
 
-    @ToNasm.annotate("CallClosure")
+    @ToTgt.annotate("CallClosure")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
         return [
             f"mov rax, {self.fn.to_nasm_val(ctx)}",
@@ -235,7 +235,7 @@ class CreateClosure(Instr):
     ret: Optional[Temp64] = None
     recursive: bool = False
 
-    @ToNasm.annotate("CreateClosure", recursive="self.recursive")
+    @ToTgt.annotate("CreateClosure", recursive="self.recursive")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
 
         # The size of a closure is the sum of the sizes of the captured
@@ -311,7 +311,7 @@ ENV_ID = -2
 
 
 @dataclass
-class FnDef(ToNasm):
+class FnDef(ToTgt):
     label: Label
     param: Temp = field(default_factory=param_factory(PARAM_ID))
     env: Temp = field(default_factory=param_factory(ENV_ID))
@@ -342,7 +342,7 @@ class FnDef(ToNasm):
             f"ret {self.param.size() + self.env.size()}"
         ]
 
-    @ToNasm.annotate("FnDef")
+    @ToTgt.annotate("FnDef")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
         return [
             # Emit the label at the top of the function.
@@ -381,7 +381,7 @@ class IfFalse(Instr):
     cond: Temp64
     label: Label
 
-    @ToNasm.annotate("IfFalse")
+    @ToTgt.annotate("IfFalse")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
         return [
             f"mov rax, {self.cond.to_nasm_val(ctx)}",
@@ -394,7 +394,7 @@ class IfFalse(Instr):
 class Goto(Instr):
     label: Label
 
-    @ToNasm.annotate("Goto")
+    @ToTgt.annotate("Goto")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
         return [
             f"jmp {self.label.as_value().to_nasm_val(ctx)}"
@@ -405,7 +405,7 @@ class Goto(Instr):
 class Return(Instr):
     value: Value
 
-    @ToNasm.annotate("Return")
+    @ToTgt.annotate("Return")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
         return [
             f"mov rax, {self.value.to_nasm_val(ctx)}",

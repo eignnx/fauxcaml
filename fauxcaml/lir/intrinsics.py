@@ -23,7 +23,7 @@ class CreateTuple(IntrinsicCall):
     values: List[lir.Value]
     ret: Optional[lir.Temp64] = None
 
-    @lir.ToNasm.annotate("CreateTuple", arity="len(self.values)")
+    @lir.ToTgt.annotate("CreateTuple", arity="len(self.values)")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
         return [
             f"mov rdi, {len(self.values) * 8}",
@@ -53,7 +53,7 @@ class AddSub(IntrinsicCall):
     def __post_init__(self):
         assert self.op in {"add", "sub"}
 
-    @lir.ToNasm.annotate("AddSub", operation="self.op")
+    @lir.ToTgt.annotate("AddSub", operation="self.op")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
         return [
             f"mov rax, {self.arg1.to_nasm_val(ctx)}",
@@ -85,7 +85,7 @@ class MulDivMod(IntrinsicCall):
     def __post_init__(self):
         assert self.op in {"mul", "div", "mod"}
 
-    @lir.ToNasm.annotate("MulDivMod", operation="self.op")
+    @lir.ToTgt.annotate("MulDivMod", operation="self.op")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
 
         instr = {
@@ -130,7 +130,7 @@ class EqI64(IntrinsicCall):
     arg2: lir.Temp64
     ret: Optional[lir.Temp64] = None
 
-    @lir.ToNasm.annotate("EqI64")
+    @lir.ToTgt.annotate("EqI64")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
         return [
             f"mov rax, {self.arg1.to_nasm_val(ctx)}",
