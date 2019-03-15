@@ -29,7 +29,7 @@ lg.add("SLASH", r"/")
 
 lg.add("COMMA", f",")
 
-lg.add("SEMI_SEMI", ";;")
+# lg.add("SEMI_SEMI", ";;")  # TODO: Impl top-level statements
 
 lg.ignore(r"\s+")
 
