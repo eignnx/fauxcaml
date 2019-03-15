@@ -49,6 +49,27 @@ class NasmGenCtx:
         self.emit_text_section(asm)
         return "\n".join(asm)
 
+    def emit_exports(self, asm):
+        asm += [
+            "extern malloc",
+            "global main",
+        ]
+
+    def emit_data_section(self, asm):
+        asm.append("section .data")
+
+        for static in self.statics:
+            asm.append(static.to_nasm_val(self))  # Todo: These probably aren't values...
+
+    def emit_text_section(self, asm):
+        asm.append("section .text")
+
+        for fn_def in self.fns:
+            self.current_fn = fn_def
+            asm.append("")
+            for line in fn_def.to_nasm(self):
+                asm.append(line)
+
     def write_to_file(self, filename="./out.asm"):
         asm = str(self)
         with open(filename, "w") as out:
@@ -57,25 +78,5 @@ class NasmGenCtx:
     def offset_of(self, temp: lir.Temp64):
         return self.current_fn.locals[temp]
 
-    def emit_data_section(self, asm):
-        asm.append("section .data")
-
-        for static in self.statics:
-            asm.append(static.to_nasm(self))
-
-    def emit_exports(self, asm):
-        asm += [
-            "extern malloc",
-            "global main",
-        ]
-
-    def emit_text_section(self, asm):
-        asm.append("section .text")
-
-        for fn_def in self.fns:
-            self.current_fn = fn_def
-            asm.append("")
-            asm.append(fn_def.to_nasm(self))
-
-    def get_epilogue(self) -> str:
+    def get_epilogue(self) -> List[str]:
         return self.current_fn.get_epilogue()

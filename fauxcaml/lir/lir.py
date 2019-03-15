@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Optional, List, Tuple, ClassVar, Dict
@@ -10,7 +11,7 @@ from fauxcaml.lir import gen_ctx
 class ToNasm(ABC):
 
     @abstractmethod
-    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
+    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
         pass
 
     @staticmethod
@@ -20,6 +21,7 @@ class ToNasm(ABC):
         nasm code with opening and closing tag comments.
         """
         def decorator(f):
+            @functools.wraps(f)
             def new_f(self, *args, **kwargs):
 
                 # noinspection PyShadowingNames
@@ -30,16 +32,23 @@ class ToNasm(ABC):
 
                 space = " " if attrs_fmt else ""
 
-                return "\n".join([
+                return [
                     f"; <{tag}{space}{attrs_fmt}>",
-                    f(self, *args, **kwargs),
+                    *f(self, *args, **kwargs),
                     f"; </{tag}>",
-                ])
+                ]
             return new_f
         return decorator
 
 
-class Value(ToNasm, ABC):
+class ToNasmVal(ABC):
+
+    @abstractmethod
+    def to_nasm_val(self, ctx: gen_ctx.NasmGenCtx) -> str:
+        pass
+
+
+class Value(ToNasmVal, ABC):
     SIZE = None
 
     def size(self) -> int:
@@ -51,7 +60,7 @@ class Value(ToNasm, ABC):
 class Static(Value):
     value: Value
 
-    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
+    def to_nasm_val(self, ctx: gen_ctx.NasmGenCtx) -> str:
         return ""
 
 
@@ -82,15 +91,15 @@ class Label:
 @dataclass
 class LabelInstr(Label, Instr):
 
-    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
-        return self.name() + ":"
+    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
+        return [self.name() + ":"]
 
 
 @dataclass
 class LabelRef(Label, Value):
     SIZE: ClassVar[int] = 8
 
-    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
+    def to_nasm_val(self, ctx: gen_ctx.NasmGenCtx) -> str:
         return self.name()
 
 
@@ -105,7 +114,7 @@ class Temp64(Temp):
 
     id: int
 
-    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
+    def to_nasm_val(self, ctx: gen_ctx.NasmGenCtx) -> str:
         bp_offset = ctx.offset_of(self)
         return f"QWORD [rbp{bp_offset:+}]"
 
@@ -115,7 +124,7 @@ class Temp0(Temp):
     """A virtual temporary. Zero sized."""
     SIZE: ClassVar[int] = 0
 
-    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
+    def to_nasm_val(self, ctx: gen_ctx.NasmGenCtx) -> str:
         raise ValueError("Don't call this function on Temp0 instance!")
 
 
@@ -128,7 +137,7 @@ class I64(Literal):
     SIZE: ClassVar[int] = 8
     val: int
 
-    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
+    def to_nasm_val(self, ctx: gen_ctx.NasmGenCtx) -> str:
         return f"QWORD {self.val}"
 
 
@@ -152,17 +161,17 @@ class GetElementPtr(Instr):
     res: Optional[Temp64] = None
 
     @ToNasm.annotate("GetElementPtr", stride="self.stride")
-    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
+    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
         if self.ptr.size() == 0:
             raise ValueError("Cannot perform GetElementPtr on zero-sized temporary!")
 
         offset = self.stride * self.index
-        return "\n".join([
-            f"mov rax, {self.ptr.to_nasm(ctx)}",
+        return [
+            f"mov rax, {self.ptr.to_nasm_val(ctx)}",
             f"mov rax, [rax{offset:+}]",
         ] + ([
-            f"mov {self.res.to_nasm(ctx)}, rax"
-        ] if self.res is not None else []))
+            f"mov {self.res.to_nasm_val(ctx)}, rax"
+        ] if self.res is not None else [])
 
 
 @dataclass
@@ -173,13 +182,13 @@ class SetElementPtr(Instr):
     value: Value
 
     @ToNasm.annotate("SetElementPtr", stride="self.stride")
-    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
+    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
         offset = self.stride * self.index
-        return "\n".join([
-            f"mov rax, {self.ptr.to_nasm(ctx)}",
-            f"mov r8, {self.value.to_nasm(ctx)}",
+        return [
+            f"mov rax, {self.ptr.to_nasm_val(ctx)}",
+            f"mov r8, {self.value.to_nasm_val(ctx)}",
             f"mov [rax{offset:+}], r8",
-        ])
+        ]
 
 
 @dataclass
@@ -188,8 +197,8 @@ class EnvLookup(Instr):
     res: Optional[Temp64] = None
 
     @ToNasm.annotate("EnvLookup", index="self.index")
-    def to_nasm(self, ctx: gen_ctx.NasmGenCtx):
-        gep = GetElementPtr(
+    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
+        return GetElementPtr(
             ptr=ctx.current_fn.env,
 
             # Skip the fn ptr (label).
@@ -198,9 +207,7 @@ class EnvLookup(Instr):
             # Assumes all env elements are 8 bytes.
             stride=8,
             res=self.res
-        )
-
-        return gep.to_nasm(ctx)
+        ).to_nasm(ctx)
 
 
 @dataclass
@@ -210,17 +217,15 @@ class CallClosure(Instr):
     ret: Optional[Temp64] = None  # If `None`, no return value (Unit)
 
     @ToNasm.annotate("CallClosure")
-    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
-        asm = [
-            f"mov rax, {self.fn.to_nasm(ctx)}",
+    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
+        return [
+            f"mov rax, {self.fn.to_nasm_val(ctx)}",
             f"push rax",
-            f"push {self.arg.to_nasm(ctx)}",
+            f"push {self.arg.to_nasm_val(ctx)}",
             f"call [rax]",
         ] + ([
-            f"mov {self.ret.to_nasm(ctx)}, rax"
+            f"mov {self.ret.to_nasm_val(ctx)}, rax"
         ] if self.ret is not None else [])
-
-        return "\n".join(asm)
 
 
 @dataclass
@@ -231,7 +236,7 @@ class CreateClosure(Instr):
     recursive: bool = False
 
     @ToNasm.annotate("CreateClosure", recursive="self.recursive")
-    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
+    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
 
         # The size of a closure is the sum of the sizes of the captured
         # variables + the size of the 8-byte label (function pointer).
@@ -244,7 +249,7 @@ class CreateClosure(Instr):
 
             # Store the label (fn ptr) in the first position
             f"mov r8, rax",
-            f"mov QWORD [r8], {self.fn_lbl.as_value().to_nasm(ctx)}",
+            f"mov QWORD [r8], {self.fn_lbl.as_value().to_nasm_val(ctx)}",
         ]
 
         # Setup an offset into the closure struct. Will be incremented AFTER
@@ -254,20 +259,19 @@ class CreateClosure(Instr):
         if self.captures:
             asm.append("; <ConstructEnvironment>")
 
-        for val in self.captures:
+            for val in self.captures:
+                asm += [
+                    # Get each captured value, put in `rax`
+                    f"mov rax, {val.to_nasm_val(ctx)}"
+                    
+                    # Store the captured value in the closure struct.
+                    f"mov QWORD [r8{offset:+}], rax"
+                ]
 
-            # Get each captured value, put in `rax`
-            asm.append(
-                f"mov rax, {val.to_nasm(ctx)}"
-            )
+                # Increment the offset by the size of the thing that was stored.
+                offset += val.size()
 
-            # Store the captured value in the closure struct.
-            asm.append(
-                f"mov QWORD [r8{offset:+}], rax"
-            )
-
-            # Increment the offset by the size of the thing that was stored.
-            offset += val.size()
+            asm.append("; </ConstructEnvironment>")
 
         # If the function is recursive, the pointer to the closure must be
         # stored in the environment too.
@@ -277,9 +281,6 @@ class CreateClosure(Instr):
             )
             offset += 8
 
-        if self.captures:
-            asm.append("; </ConstructEnvironment>")
-
         # Move the ptr to the closure back into `rax`.
         asm.append(
             f"mov rax, r8"
@@ -288,10 +289,10 @@ class CreateClosure(Instr):
         if self.ret is not None:
             # Store the closure ptr in the result temporary.
             asm.append(
-                f"mov {self.ret.to_nasm(ctx)}, rax"
+                f"mov {self.ret.to_nasm_val(ctx)}, rax"
             )
 
-        return "\n".join(asm)
+        return asm
 
 
 def param_factory(id, size: int = 8):
@@ -332,28 +333,30 @@ class FnDef(ToNasm):
             if local not in [self.param, self.env]
         )
 
-    def get_epilogue(self) -> str:
-        return "\n".join([
+    def get_epilogue(self) -> List[str]:
+        return [
             # Deallocate all the locals.
             f"leave",
 
             # After returning, deallocate the argument passed in.
             f"ret {self.param.size() + self.env.size()}"
-        ])
+        ]
 
     @ToNasm.annotate("FnDef")
-    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
-        return "\n".join([
+    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
+        return [
             # Emit the label at the top of the function.
-            self.label.as_instr().to_nasm(ctx),
+            *self.label.as_instr().to_nasm(ctx),
 
             # Allocate space for local variables.
             f"enter {self.local_alloca_size()}, 0"
         ] + [
-            instr.to_nasm(ctx) for instr in self.body
+            line  # Python's ugly flatmap...
+            for instr in self.body
+            for line in instr.to_nasm(ctx)
         ] + [
-            self.get_epilogue()
-        ])
+            *self.get_epilogue()
+        ]
 
     def new_temp64(self) -> Temp64:
         t = Temp64(self.next_temp_id)
@@ -369,8 +372,8 @@ class FnDef(ToNasm):
 class Comment(Instr):
     text: str
 
-    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
-        return f";;; {self.text}"
+    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
+        return [f";;; {self.text}"]
 
 
 @dataclass
@@ -379,12 +382,12 @@ class IfFalse(Instr):
     label: Label
 
     @ToNasm.annotate("IfFalse")
-    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
-        return "\n".join([
-            f"mov rax, {self.cond.to_nasm(ctx)}",
+    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
+        return [
+            f"mov rax, {self.cond.to_nasm_val(ctx)}",
             f"test al, al",
-            f"je {self.label.as_value().to_nasm(ctx)}",
-        ])
+            f"je {self.label.as_value().to_nasm_val(ctx)}",
+        ]
 
 
 @dataclass
@@ -392,8 +395,10 @@ class Goto(Instr):
     label: Label
 
     @ToNasm.annotate("Goto")
-    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
-        return f"jmp {self.label.as_value().to_nasm(ctx)}"
+    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
+        return [
+            f"jmp {self.label.as_value().to_nasm_val(ctx)}"
+        ]
 
 
 @dataclass
@@ -401,9 +406,10 @@ class Return(Instr):
     value: Value
 
     @ToNasm.annotate("Return")
-    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
-        return "\n".join([
-            f"mov rax, {self.value.to_nasm(ctx)}",
-            ctx.get_epilogue()
-        ])
+    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
+        return [
+            f"mov rax, {self.value.to_nasm_val(ctx)}",
+        ] + [
+            *ctx.get_epilogue()
+        ]
 

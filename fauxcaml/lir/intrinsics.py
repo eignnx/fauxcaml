@@ -24,20 +24,21 @@ class CreateTuple(IntrinsicCall):
     ret: Optional[lir.Temp64] = None
 
     @lir.ToNasm.annotate("CreateTuple", arity="len(self.values)")
-    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
-        return "\n".join([
+    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
+        return [
             f"mov rdi, {len(self.values) * 8}",
             f"call malloc",
-            f"mov {self.ret.to_nasm(ctx)}, rax",
+            f"mov {self.ret.to_nasm_val(ctx)}, rax",
         ] + [
-            lir.SetElementPtr(
+            line  # Python's ugly flatmap...
+            for i, value in enumerate(self.values)
+            for line in lir.SetElementPtr(
                 ptr=self.ret,
                 index=i,
                 stride=8,
                 value=value
             ).to_nasm(ctx)
-            for i, value in enumerate(self.values)
-        ])
+        ]
 
 
 @dataclass
@@ -53,18 +54,13 @@ class AddSub(IntrinsicCall):
         assert self.op in {"add", "sub"}
 
     @lir.ToNasm.annotate("AddSub", operation="self.op")
-    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
-        asm = [
-            f"mov rax, {self.arg1.to_nasm(ctx)}",
-            f"{self.op} rax, {self.arg2.to_nasm(ctx)}",
-        ]
-
-        if self.res is not None:
-            asm.append(
-                f"mov {self.res.to_nasm(ctx)}, rax"
-            )
-
-        return "\n".join(asm)
+    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
+        return [
+            f"mov rax, {self.arg1.to_nasm_val(ctx)}",
+            f"{self.op} rax, {self.arg2.to_nasm_val(ctx)}",
+        ] + ([
+            f"mov {self.res.to_nasm_val(ctx)}, rax"
+        ] if self.res is not None else [])
 
 
 # noinspection PyPep8Naming
@@ -90,7 +86,7 @@ class MulDivMod(IntrinsicCall):
         assert self.op in {"mul", "div", "mod"}
 
     @lir.ToNasm.annotate("MulDivMod", operation="self.op")
-    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
+    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
 
         instr = {
             "mul": "mul",
@@ -98,21 +94,19 @@ class MulDivMod(IntrinsicCall):
             "mod": "div",
         }[self.op]
 
-        asm = ([
+        return ([
             # Zero out top bits of dividend.
             f"xor rdx, rdx"
         ] if instr == "div" else []) + [
-            f"mov rax, {self.arg1.to_nasm(ctx)}",
-            f"mov r8, {self.arg2.to_nasm(ctx)}",
+            f"mov rax, {self.arg1.to_nasm_val(ctx)}",
+            f"mov r8, {self.arg2.to_nasm_val(ctx)}",
             f"{instr} r8",
         ] + ([
             # Move the remainder into the result register.
             f"mov rax, rdx"
         ] if self.op == "mod" else []) + ([
-            f"mov {self.res.to_nasm(ctx)}, rax"
+            f"mov {self.res.to_nasm_val(ctx)}, rax"
         ] if self.res is not None else [])
-
-        return "\n".join(asm)
 
 
 # noinspection PyPep8Naming
@@ -137,11 +131,12 @@ class EqI64(IntrinsicCall):
     ret: Optional[lir.Temp64] = None
 
     @lir.ToNasm.annotate("EqI64")
-    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> str:
-        return "\n".join([
-            f"mov rax, {self.arg1.to_nasm(ctx)}",
-            f"cmp rax, {self.arg2.to_nasm(ctx)}",
+    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
+        return [
+            f"mov rax, {self.arg1.to_nasm_val(ctx)}",
+            f"cmp rax, {self.arg2.to_nasm_val(ctx)}",
             f"sete al",
         ] + ([
-            f"mov {self.ret.to_nasm(ctx)}, rax"
-        ] if self.ret is not None else []))
+            f"mov {self.ret.to_nasm_val(ctx)}, rax"
+        ] if self.ret is not None else [])
+
