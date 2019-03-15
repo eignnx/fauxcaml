@@ -34,7 +34,10 @@ class ToTgt(ABC):
 
                 return [
                     f"; <{tag}{space}{props}>",
-                    *f(self, *args, **kwargs),
+                    *(
+                        "    " + line
+                        for line in f(self, *args, **kwargs)
+                    ),
                     f"; </{tag}>",
                 ]
             return new_f
