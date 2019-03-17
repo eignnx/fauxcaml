@@ -14,28 +14,44 @@ class ToTgt(ABC):
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
         pass
 
+    ANNOTATION_INDENT = 4
+
     @staticmethod
     def annotate(tag, **attrs):
         """
         A decorator to put on top of `to_nasm` definitions. Will wrap the output
-        nasm code with opening and closing tag comments.
+        nasm code with opening and closing tag comments. Attributes to print
+        inside the tag can be passed in as key-value pairs where the key will
+        be printed as-is, and the value will be evaluated in the context of
+        the `self` method parameter.
+
+        Ex:
+            @ToTgt.annotate("MyInstruction", foo="foo_field", bar="1+2")
+            def my_method(self, ...):
+                ...
+
+            ...will be printed as...
+
+            <MyInstruction foo="value of self.foo_field" bar="3">
+                ...
+            </MyInstruction>
+
         """
+        indent = " " * ToTgt.ANNOTATION_INDENT
+
         def decorator(f):
             @functools.wraps(f)
             def new_f(self, *args, **kwargs):
 
-                # noinspection PyShadowingNames
-                props = ", ".join(
-                    f"{prop}=\"{eval(expr, globals(), {'self': self})}\""
+                props = "".join(
+                    f" {prop}=\"{eval(expr, globals(), self.__dict__)}\""
                     for prop, expr in attrs.items()
                 )
 
-                space = " " if props else ""
-
                 return [
-                    f"; <{tag}{space}{props}>",
+                    f"; <{tag}{props}>",
                     *(
-                        "    " + line
+                        f"{indent}{line}"
                         for line in f(self, *args, **kwargs)
                     ),
                     f"; </{tag}>",
@@ -163,7 +179,7 @@ class GetElementPtr(Instr):
     stride: int
     res: Optional[Temp64] = None
 
-    @ToTgt.annotate("GetElementPtr", stride="self.stride")
+    @ToTgt.annotate("GetElementPtr", stride="stride")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
         if self.ptr.size() == 0:
             raise ValueError("Cannot perform GetElementPtr on zero-sized temporary!")
@@ -184,7 +200,7 @@ class SetElementPtr(Instr):
     stride: int
     value: Value
 
-    @ToTgt.annotate("SetElementPtr", stride="self.stride")
+    @ToTgt.annotate("SetElementPtr", stride="stride")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
         offset = self.stride * self.index
         return [
@@ -199,7 +215,7 @@ class EnvLookup(Instr):
     index: int
     res: Optional[Temp64] = None
 
-    @ToTgt.annotate("EnvLookup", index="self.index")
+    @ToTgt.annotate("EnvLookup", index="index")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
         return GetElementPtr(
             ptr=ctx.current_fn.env,
@@ -238,7 +254,7 @@ class CreateClosure(Instr):
     ret: Optional[Temp64] = None
     recursive: bool = False
 
-    @ToTgt.annotate("CreateClosure", recursive="self.recursive")
+    @ToTgt.annotate("CreateClosure", recursive="recursive")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
 
         # The size of a closure is the sum of the sizes of the captured
