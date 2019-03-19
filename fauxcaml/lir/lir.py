@@ -177,7 +177,7 @@ class GetElementPtr(Instr):
     ptr: Temp
     index: int
     stride: int
-    res: Optional[Temp64] = None
+    res: Temp64
 
     @ToTgt.annotate("GetElementPtr", stride="stride")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
@@ -188,9 +188,8 @@ class GetElementPtr(Instr):
         return [
             f"mov rax, {self.ptr.to_nasm_val(ctx)}",
             f"mov rax, [rax{offset:+}]",
-        ] + ([
-            f"mov {self.res.to_nasm_val(ctx)}, rax"
-        ] if self.res is not None else [])
+            f"mov {self.res.to_nasm_val(ctx)}, rax",
+        ]
 
 
 @dataclass
@@ -213,7 +212,7 @@ class SetElementPtr(Instr):
 @dataclass
 class EnvLookup(Instr):
     index: int
-    res: Optional[Temp64] = None
+    res: Temp64
 
     @ToTgt.annotate("EnvLookup", index="index")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
@@ -233,7 +232,7 @@ class EnvLookup(Instr):
 class CallClosure(Instr):
     fn: Temp64
     arg: Value
-    ret: Optional[Temp64] = None  # If `None`, no return value (Unit)
+    ret: Temp  # If `Temp0`, no return value (Unit)
 
     @ToTgt.annotate("CallClosure")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
@@ -244,14 +243,14 @@ class CallClosure(Instr):
             f"call [rax]",
         ] + ([
             f"mov {self.ret.to_nasm_val(ctx)}, rax"
-        ] if self.ret is not None else [])
+        ] if self.ret.size() > 0 else [])
 
 
 @dataclass
 class CreateClosure(Instr):
     fn_lbl: LabelRef
     captures: List[Value]
-    ret: Optional[Temp64] = None
+    ret: Temp64
     recursive: bool = False
 
     @ToTgt.annotate("CreateClosure", recursive="recursive")
@@ -300,16 +299,13 @@ class CreateClosure(Instr):
             )
             offset += 8
 
-        # Move the ptr to the closure back into `rax`.
-        asm.append(
-            f"mov rax, r8"
-        )
+        asm += [
+            # Move the ptr to the closure back into `rax`.
+            f"mov rax, r8",
 
-        if self.ret is not None:
             # Store the closure ptr in the result temporary.
-            asm.append(
-                f"mov {self.ret.to_nasm_val(ctx)}, rax"
-            )
+            f"mov {self.ret.to_nasm_val(ctx)}, rax",
+        ]
 
         return asm
 

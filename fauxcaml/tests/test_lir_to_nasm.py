@@ -59,10 +59,12 @@ def test_create_closure():
         ])
 
     closure_tmp = ctx.new_temp64()
+    ret = ctx.new_temp64()
 
     ctx.add_instrs([
         lir.CreateClosure(fn_lbl.as_value(), [], closure_tmp),
-        lir.CallClosure(closure_tmp, lir.I64(11))
+        lir.CallClosure(closure_tmp, lir.I64(11), ret),
+        lir.Return(ret),
     ])
 
     assert_main_returns(ctx, 111)
@@ -79,21 +81,22 @@ def test_adder_factory():
         ])
 
     with ctx.inside_new_fn_def("$adder") as (adder_lbl, x):
-        ctx.add_instr(
-            lir.CreateClosure(
-                adder_closure_lbl,
-                [x]
-            )
-        )
+        ret = ctx.new_temp64()
+        ctx.add_instrs([
+            lir.CreateClosure(adder_closure_lbl, [x], ret),
+            lir.Return(ret),
+        ])
 
     # Inside `main`:
     adder = ctx.new_temp64()
     plus77 = ctx.new_temp64()
+    ret = ctx.new_temp64()
 
     ctx.add_instrs([
         lir.CreateClosure(adder_lbl, [], adder),
         lir.CallClosure(adder, lir.I64(77), plus77),
-        lir.CallClosure(plus77, lir.I64(99)),
+        lir.CallClosure(plus77, lir.I64(99), ret),
+        lir.Return(ret),
     ])
 
     assert_main_returns(ctx, 77 + 99)
@@ -107,12 +110,14 @@ def test_arithmetic_intrinsics():
     t0 = ctx.new_temp64()
     t1 = ctx.new_temp64()
     t2 = ctx.new_temp64()
+    ret = ctx.new_temp64()
 
     ctx.add_instrs([
         intrinsics.Div(lir.I64(9), lir.I64(2), t0),
         intrinsics.Mod(lir.I64(7), lir.I64(3), t1),
         intrinsics.Sub(t0, t1, t2),
-        intrinsics.Mul(lir.I64(2), t2)
+        intrinsics.Mul(lir.I64(2), t2, ret),
+        lir.Return(ret),
     ])
 
     assert_main_returns(ctx, expected)
@@ -138,8 +143,8 @@ def test_iterative_fibonacci():
         end_if = ctx.new_label("end_if")
 
         ctx.add_instrs([
-            lir.GetElementPtr(tup, 0, 8, i),
-            lir.GetElementPtr(tup, 1, 8, acc),
+            lir.GetElementPtr(tup, index=0, stride=8, res=i),
+            lir.GetElementPtr(tup, index=1, stride=8, res=acc),
             lir.EnvLookup(0, env_n),
             intrinsics.EqI64(i, env_n, cond),
             lir.IfFalse(cond, _else),
@@ -183,6 +188,3 @@ def test_iterative_fibonacci():
     ])
 
     assert_main_returns(ctx, 120)
-
-
-

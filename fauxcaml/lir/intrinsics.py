@@ -21,7 +21,7 @@ class IntrinsicCall(lir.Instr, ABC):
 @dataclass
 class CreateTuple(IntrinsicCall):
     values: List[lir.Value]
-    ret: Optional[lir.Temp64] = None
+    ret: lir.Temp64
 
     @lir.ToTgt.annotate("CreateTuple", arity="len(values)")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
@@ -78,9 +78,7 @@ class MulDivMod(IntrinsicCall):
     op: str
     arg1: lir.Value
     arg2: lir.Value
-
-    # Optionally store result in temp in addition to `rax`.
-    res: Optional[lir.Temp] = None
+    res: lir.Temp64
 
     def __post_init__(self):
         assert self.op in {"mul", "div", "mod"}
@@ -104,23 +102,23 @@ class MulDivMod(IntrinsicCall):
         ] + ([
             # Move the remainder into the result register.
             f"mov rax, rdx"
-        ] if self.op == "mod" else []) + ([
+        ] if self.op == "mod" else []) + [
             f"mov {self.res.to_nasm_val(ctx)}, rax"
-        ] if self.res is not None else [])
+        ]
 
 
 # noinspection PyPep8Naming
-def Mul(arg1: lir.Value, arg2: lir.Value, res: Optional[lir.Temp] = None) -> MulDivMod:
+def Mul(arg1: lir.Value, arg2: lir.Value, res: lir.Temp64) -> MulDivMod:
     return MulDivMod("mul", arg1, arg2, res)
 
 
 # noinspection PyPep8Naming
-def Div(arg1: lir.Value, arg2: lir.Value, res: Optional[lir.Temp] = None) -> MulDivMod:
+def Div(arg1: lir.Value, arg2: lir.Value, res: lir.Temp64) -> MulDivMod:
     return MulDivMod("div", arg1, arg2, res)
 
 
 # noinspection PyPep8Naming
-def Mod(arg1: lir.Value, arg2: lir.Value, res: Optional[lir.Temp] = None) -> MulDivMod:
+def Mod(arg1: lir.Value, arg2: lir.Value, res: lir.Temp64) -> MulDivMod:
     return MulDivMod("mod", arg1, arg2, res)
 
 
@@ -128,7 +126,7 @@ def Mod(arg1: lir.Value, arg2: lir.Value, res: Optional[lir.Temp] = None) -> Mul
 class EqI64(IntrinsicCall):
     arg1: lir.Temp64
     arg2: lir.Temp64
-    ret: Optional[lir.Temp64] = None
+    ret: lir.Temp64
 
     @lir.ToTgt.annotate("EqI64")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
@@ -136,7 +134,6 @@ class EqI64(IntrinsicCall):
             f"mov rax, {self.arg1.to_nasm_val(ctx)}",
             f"cmp rax, {self.arg2.to_nasm_val(ctx)}",
             f"sete al",
-        ] + ([
-            f"mov {self.ret.to_nasm_val(ctx)}, rax"
-        ] if self.ret is not None else [])
+            f"mov {self.ret.to_nasm_val(ctx)}, rax",
+        ]
 
