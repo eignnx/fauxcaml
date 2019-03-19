@@ -123,7 +123,7 @@ def test_arithmetic_intrinsics():
     assert_main_returns(ctx, expected)
 
 
-def test_iterative_fibonacci():
+def test_iterative_factorial():
     ctx = gen_ctx.NasmGenCtx()
 
     with ctx.inside_new_fn_def("$iter") as (iter_lbl, tup):
@@ -166,15 +166,12 @@ def test_iterative_fibonacci():
 
     with ctx.inside_new_fn_def("$fact") as (fact_lbl, n):
         iter = ctx.new_temp64()
-        t0 = ctx.new_temp64()
+        tup = ctx.new_temp64()
         t1 = ctx.new_temp64()
         ctx.add_instrs([
-            lir.CreateClosure(iter_lbl, [n], iter, recursive=True),
-            intrinsics.CreateTuple([
-                lir.I64(0),
-                lir.I64(1),
-            ], t0),
-            lir.CallClosure(iter, t0, t1),
+            lir.CreateClosure(iter_lbl, [n], ret=iter, recursive=True),
+            intrinsics.CreateTuple([lir.I64(1), lir.I64(1)], tup),
+            lir.CallClosure(iter, tup, t1),
             lir.Return(t1),
         ])
 
