@@ -257,16 +257,20 @@ class CreateClosure(Instr):
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
 
         # The size of a closure is the sum of the sizes of the captured
-        # variables + the size of the 8-byte label (function pointer).
-        size = sum(val.size() for val in self.captures) + self.fn_lbl.as_value().size()
+        # variables and the size of the 8-byte label (function pointer).
+        # If the closure is recursive, a pointer to the closure struct
+        # itself must also be stored.
+        size = self.fn_lbl.as_value().size()              \
+             + sum(val.size() for val in self.captures)   \
+             + (self.ret.size() if self.recursive else 0)
 
         asm = [
             # Allocate a `size`-sized block of memory on the heap.
             f"mov rdi, {size}",
             f"call malloc",
+            f"mov r8, rax",
 
             # Store the label (fn ptr) in the first position
-            f"mov r8, rax",
             f"mov QWORD [r8], {self.fn_lbl.as_value().to_nasm_val(ctx)}",
         ]
 
@@ -299,13 +303,10 @@ class CreateClosure(Instr):
             )
             offset += 8
 
-        asm += [
-            # Move the ptr to the closure back into `rax`.
-            f"mov rax, r8",
-
+        asm.append(
             # Store the closure ptr in the result temporary.
-            f"mov {self.ret.to_nasm_val(ctx)}, rax",
-        ]
+            f"mov {self.ret.to_nasm_val(ctx)}, r8",
+        )
 
         return asm
 
