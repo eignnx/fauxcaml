@@ -281,10 +281,10 @@ class CreateClosure(Instr):
             for val in self.captures:
                 asm += [
                     # Get each captured value, put in `rax`
-                    f"mov rax, {val.to_nasm_val(ctx)}"
+                    f"mov rax, {val.to_nasm_val(ctx)}",
                     
                     # Store the captured value in the closure struct.
-                    f"mov QWORD [r8{offset:+}], rax"
+                    f"mov QWORD [r8{offset:+}], rax",
                 ]
 
                 # Increment the offset by the size of the thing that was stored.
