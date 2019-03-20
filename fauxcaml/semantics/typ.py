@@ -35,25 +35,25 @@ class Var(Type):
 
 class Poly(Type):
     JOIN = None
-    SIZE = None
+    ARITY = None
     PARENS = None
 
     def __init__(self, *vals):
-        if self.SIZE is not None and len(vals) > self.SIZE:
+        if self.ARITY is not None and len(vals) > self.ARITY:
             cls_name = self.__class__.__name__
-            msg = f"{cls_name} constructor takes at most {self.SIZE} arguments, {len(vals)} given!"
+            msg = f"{cls_name} constructor takes at most {self.ARITY} arguments, {len(vals)} given!"
             raise ValueError(msg)
         self.vals = vals
 
     def __repr__(self):
-        if self.SIZE == 0:
+        if self.ARITY == 0:
             return self.__class__.__name__
         cls_name = self.__class__.__name__
         vals = ", ".join(repr(v) for v in self.vals)
         return f"{cls_name}({vals})"
 
     def __str__(self):
-        if self.SIZE == 0:
+        if self.ARITY == 0:
             return self.__class__.__name__
         else:
             sep = f" {self.JOIN} " if self.JOIN is not None else ", "
@@ -83,7 +83,7 @@ class Tuple(Poly):
 
 class List(Poly):
     JOIN = None
-    SIZE = 1
+    ARITY = 1
 
     def __str__(self):
         [val] = self.vals
@@ -92,22 +92,22 @@ class List(Poly):
 
 class Fn(Poly):
     JOIN = unicode.ARROW
-    SIZE = 2
+    ARITY = 2
 
 
 @instance
 class Int(Poly):
-    SIZE = 0
+    ARITY = 0
 
 
 @instance
 class Bool(Poly):
-    SIZE = 0
+    ARITY = 0
 
 
 @instance
 class Unit(Poly):
-    SIZE = 0
+    ARITY = 0
 
 
 # These are cast because PyCharm can't typecheck my `instance` decorator.
