@@ -248,7 +248,7 @@ class CallClosure(Instr):
 
 @dataclass
 class CreateClosure(Instr):
-    fn_lbl: LabelRef
+    fn_lbl: Label
     captures: List[Value]
     ret: Temp64
     recursive: bool = False

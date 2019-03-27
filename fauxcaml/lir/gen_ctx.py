@@ -34,7 +34,7 @@ class NasmGenCtx:
         return self.current_fn.new_temp64()
 
     @contextlib.contextmanager
-    def inside_new_fn_def(self, custom_fn_name=""):
+    def inside_new_fn_def(self, custom_fn_name: Optional[str] = None):
         old_fn_def = self.current_fn
         new_fn_label = self.new_label(custom_fn_name)
         self.current_fn = lir.FnDef(new_fn_label)
