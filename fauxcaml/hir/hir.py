@@ -15,24 +15,20 @@ class Addr(Value):
 
 @dataclass
 class Ident(Addr):
-    name: str
+    id: int
     type: typ.Type
 
-    def __str__(self):
-        return f"{self.name}: {self.type}"
+
+@dataclass
+class Capture(Addr):
+    path: List[int]
+    type: typ.Type
 
 
 @dataclass
 class Temp(Addr):
     id: int
     type: typ.Type
-
-    @property
-    def name(self):
-        return f"%t{self.id}"
-
-    def __str__(self):
-        return self.name
 
 
 @dataclass
