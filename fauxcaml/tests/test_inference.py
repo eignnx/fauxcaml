@@ -1,10 +1,10 @@
 import pytest
 
+from fauxcaml import parsing
 from fauxcaml.semantics import check
 from fauxcaml.semantics.syntax import Const, Ident, Lambda, Call, Let, If
 from fauxcaml.semantics.typ import Int, Bool, Fn, Tuple, List
 from fauxcaml.semantics.unifier_set import UnificationError
-from fauxcaml import parsing
 
 
 def test_const():
@@ -45,7 +45,7 @@ def test_lambda():
 
 
 def test_lambda_zero():
-    fn: Lambda = parsing.parse("fun x -> zero x")
+    fn: Lambda = parsing.parse_expr("fun x -> zero x")
     checker = check.Checker()
     fn_type = fn.infer_type(checker)
     assert checker.concretize(fn_type) == Fn(Int, Bool)
@@ -53,7 +53,7 @@ def test_lambda_zero():
 
 
 def test_two_arg_fn_call():
-    call = parsing.parse("pair 3 true")
+    call = parsing.parse_expr("pair 3 true")
     checker = check.Checker()
     assert checker.concretize(call.infer_type(checker)) == Tuple(Int, Bool)
 
@@ -73,7 +73,7 @@ def test_instantiation_call():
 
 
 def test_simple_let():
-    let: Let = parsing.parse("""
+    let: Let = parsing.parse_expr("""
         let x = 3 in
         x
     """)
@@ -84,7 +84,7 @@ def test_simple_let():
 
 
 def test_bad_application():
-    fn = parsing.parse("""
+    fn = parsing.parse_expr("""
         fun f -> pair (f 3) (f true)
     """)
 
@@ -94,7 +94,7 @@ def test_bad_application():
 
 
 def test_complex_let():
-    let = parsing.parse("""
+    let = parsing.parse_expr("""
         let f = fun a -> a in
         (f 3, f true)
     """)
@@ -141,10 +141,23 @@ def test_length_fn():
 
 def test_parser_let():
     checker = check.Checker()
-    let = parsing.parse("""
+    let = parsing.parse_expr("""
         let f = fun x -> x in
         pair (f 3) (f true)
     """)
     inferred = let.infer_type(checker)
     assert checker.concretize(inferred) == Tuple(Int, Bool)
+
+
+def test_statements():
+    checker = check.Checker()
+    stmts = parsing.parse("""
+        let f x = x + 12;;
+        let y = f 12;;
+    """)
+    stmts.infer_type(checker)
+    [let_f, let_y] = stmts.stmts
+    y = let_y.left
+
+    assert y.type == Int
 

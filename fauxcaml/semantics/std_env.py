@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from fauxcaml.semantics import check
-from fauxcaml.semantics import typ
 from fauxcaml.semantics import env
 from fauxcaml.semantics import syntax
+from fauxcaml.semantics import typ
 
 
 def std_env(checker: check.Checker) -> env.Env[syntax.Ident, typ.Type]:
@@ -20,4 +20,8 @@ def std_env(checker: check.Checker) -> env.Env[syntax.Ident, typ.Type]:
         syntax.Ident("pred"): typ.Fn(typ.Int, typ.Int),
         syntax.Ident("times"): typ.Fn(typ.Int, typ.Fn(typ.Int, typ.Int)),
         syntax.Ident("pair"): typ.Fn(V, typ.Fn(W, typ.Tuple(V, W))),
+        syntax.Ident("+"): typ.Fn(typ.Int, typ.Fn(typ.Int, typ.Int)),
+        syntax.Ident("-"): typ.Fn(typ.Int, typ.Fn(typ.Int, typ.Int)),
+        syntax.Ident("*"): typ.Fn(typ.Int, typ.Fn(typ.Int, typ.Int)),
+        syntax.Ident("div"): typ.Fn(typ.Int, typ.Fn(typ.Int, typ.Int)),
     })

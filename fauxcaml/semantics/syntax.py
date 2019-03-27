@@ -4,14 +4,12 @@ import functools
 import typing
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Generator
 
 from fauxcaml.hir import gen_ctx
 from fauxcaml.hir import hir
 from fauxcaml.semantics import check
 from fauxcaml.semantics import typ
 from fauxcaml.semantics import unifier_set
-from fauxcaml.semantics.typ import Type
 
 
 class AstNode(ABC):
@@ -23,9 +21,9 @@ class AstNode(ABC):
     def infer_type(self, checker: check.Checker) -> typ.Type:
         pass
 
-    @abstractmethod
-    def code_gen(self, ctx: gen_ctx.CodeGenContext) -> hir.Value:
-        pass
+    # @abstractmethod
+    # def code_gen(self, ctx: gen_ctx.CodeGenContext) -> hir.Value:
+    #     pass
 
     @staticmethod
     def cache_type(fn: typing.Callable[[AstNode, check.Checker], typ.Type]):
@@ -303,4 +301,55 @@ class TupleLit(AstNode):
 
     def code_gen(self, ctx: gen_ctx.CodeGenContext) -> hir.Value:
         raise NotImplementedError
+
+
+class TopLevelStmt(AstNode, ABC):
+    pass
+
+
+@dataclass
+class LetStmt(TopLevelStmt):
+    """
+    Represents a top-level let statement.
+    ```
+    let f x =
+        x + 1;;
+    ```
+    """
+    left: Ident
+    right: AstNode
+
+    @AstNode.cache_type
+    def infer_type(self, checker: check.Checker) -> typ.Type:
+
+        # First, bind `left` to a fresh type variable. This allows
+        # for recursive let statements.
+        # Note: `alpha` is only non-generic while inferring `right`. TODO: Why tho?
+        with checker.scoped_non_generic() as alpha:
+            checker.type_env[self.left] = alpha
+
+            # HACK: Do this so that `Ident` `self.left` caches its type.
+            _ = self.left.infer_type(checker)
+
+            # Next infer the type of `right` using the binding just created.
+            right_type = self.right.infer_type(checker)
+
+        # Link the type variable with the inferred type of `right`.
+        checker.unify(alpha, right_type)
+
+        return typ.Unit
+
+
+@dataclass
+class TopLevelStmts(AstNode):
+    stmts: typing.List[TopLevelStmt]
+
+    @AstNode.cache_type
+    def infer_type(self, checker: check.Checker) -> typ.Type:
+        for stmt in self.stmts:
+            stmt.infer_type(checker)
+        return typ.Unit
+
+    def __add__(self, other):
+        return TopLevelStmts(self.stmts + other.stmts)
 

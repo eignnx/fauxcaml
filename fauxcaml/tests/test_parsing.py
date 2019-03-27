@@ -1,10 +1,12 @@
-from fauxcaml.parsing import parse
-from fauxcaml.semantics.syntax import Ident, Const, Lambda, Call, Let, If, TupleLit
+from fauxcaml import parsing
+from fauxcaml.semantics.syntax import Ident, Const, Lambda, Call, Let, If, TupleLit, TopLevelStmts, LetStmt
 from fauxcaml.semantics.typ import Int, Bool
 
 
 def test_if_stmt():
-    parsed_if = parse("if true then succ 3 else pred 5")
+    parsed_if = parsing.parse_expr("""
+        if true then succ 3 else pred 5
+    """)
 
     three = Const(3, Int)
     five = Const(5, Int)
@@ -19,12 +21,12 @@ def test_if_stmt():
 
 
 def test_fun_decl_in_let():
-    fun_decl = parse("""
+    fun_decl = parsing.parse_expr("""
         let f x y z = 1 in
         f
     """)
 
-    nested_lambda = parse("""
+    nested_lambda = parsing.parse_expr("""
         let f = fun x -> fun y -> fun z -> 1 in
         f
     """)
@@ -33,13 +35,13 @@ def test_fun_decl_in_let():
 
 
 def test_lambda():
-    parsed_fn = parse("fun x -> zero x")
+    parsed_fn = parsing.parse_expr("fun x -> zero x")
     built_fn = Lambda(Ident("x"), Call(Ident("zero"), Ident("x")))
     assert parsed_fn == built_fn
 
 
 def test_curried_fn_call():
-    parsed_call = parse("pair 3 true")
+    parsed_call = parsing.parse_expr("pair 3 true")
 
     pair = Ident("pair")
     three = Const(3, Int)
@@ -50,7 +52,7 @@ def test_curried_fn_call():
 
 
 def test_complex_let():
-    parsed_let = parse("""
+    parsed_let = parsing.parse_expr("""
         let f = fun a -> a in
         pair (f 3) (f true)
     """)
@@ -73,7 +75,7 @@ def test_complex_let():
 
 
 def test_tuple_lit():
-    actual = parse("""
+    actual = parsing.parse_expr("""
         (1, true, 1234, (100, false))
     """)
 
@@ -86,6 +88,22 @@ def test_tuple_lit():
             Const(False, Bool)
         )
     )
+
+    assert actual == expected
+
+
+def test_stmt_parsing():
+    actual = parsing.parse("""
+        let f x = 12;;
+        let y = 1;;
+        99;;
+    """)
+
+    expected = TopLevelStmts([
+        LetStmt(Ident("f"), Lambda(Ident("x"), Const(12, Int))),
+        LetStmt(Ident("y"), Const(1, Int)),
+        Const(99, Int),
+    ])
 
     assert actual == expected
 

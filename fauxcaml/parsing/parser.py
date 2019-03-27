@@ -1,12 +1,13 @@
 import rply
 
-from fauxcaml.semantics import typ, syntax
 from fauxcaml import utils
 from fauxcaml.parsing import lexer
+from fauxcaml.semantics import typ, syntax
 
 pg = rply.ParserGenerator(
     lexer.all_tokens,
     precedence=[
+        ("left", ["SEMI_SEMI"]),
         ("left", ["FUN", "ROCKET"]),
         ("left", ["IF", "THEN", "ELSE"]),
         ("left", ["INT_LIT", "BOOL_LIT", "IDENT"]),
@@ -19,6 +20,32 @@ pg = rply.ParserGenerator(
     ],
     cache_id="hindley-milner"
 )
+
+
+@pg.production("stmts : stmt stmts")
+def stmts(s):
+    return syntax.TopLevelStmts([s[0]]) + s[1]
+
+
+@pg.production("stmts : stmt")
+def stmts_singular(s):
+    return syntax.TopLevelStmts([s[0]])
+
+
+@pg.production("stmt : let_stmt")
+def stmt(s):
+    return s[0]
+
+
+@pg.production("stmt : expr SEMI_SEMI")
+def expr_stmt(s):
+    return s[0]
+
+
+@pg.production("let_stmt : LET decl SEMI_SEMI")
+def let_stmt(s):
+    decl = s[1]
+    return syntax.LetStmt(decl["lhs"], decl["rhs"])
 
 
 @pg.production("expr : IF expr THEN expr ELSE expr")
@@ -126,8 +153,7 @@ def paren_expr(s):
 @pg.production("expr : expr EQ expr", precedence="infix_operator")
 def bin_op_expr(s):
     ident = syntax.Ident(s[1].value)
-    tup = syntax.TupleLit(s[0], s[2])
-    return syntax.Call(ident, tup)
+    return syntax.Call(syntax.Call(ident, s[0]), s[2])
 
 
 parser = pg.build()
@@ -140,7 +166,7 @@ if __name__ == '__main__':
     checker = check.Checker()
     code = """
     let f = fun a -> a in
-    (f true, f 13)
+    (f true, f 13);;
     """
     ast = parse(code)
     print(ast)
