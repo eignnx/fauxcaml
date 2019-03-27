@@ -303,12 +303,8 @@ class TupleLit(AstNode):
         raise NotImplementedError
 
 
-class TopLevelStmt(AstNode, ABC):
-    pass
-
-
 @dataclass
-class LetStmt(TopLevelStmt):
+class LetStmt(AstNode):
     """
     Represents a top-level let statement.
     ```
@@ -342,7 +338,7 @@ class LetStmt(TopLevelStmt):
 
 @dataclass
 class TopLevelStmts(AstNode):
-    stmts: typing.List[TopLevelStmt]
+    stmts: typing.List[AstNode]
 
     @AstNode.cache_type
     def infer_type(self, checker: check.Checker) -> typ.Type:
