@@ -14,7 +14,7 @@ pg = rply.ParserGenerator(
         ("left", ["LET", "REC", "EQ", "IN"]),
         ("left", ["infix_operator"]),
         ("left", ["PLUS", "MINUS"]),
-        ("left", ["STAR", "SLASH"]),
+        ("left", ["STAR", "DIV", "MOD"]),
         ("left", ["LPAREN", "RPAREN"]),
         ("left", ["application"]),
     ],
@@ -149,11 +149,12 @@ def paren_expr(s):
 @pg.production("expr : expr PLUS expr")
 @pg.production("expr : expr MINUS expr")
 @pg.production("expr : expr STAR expr")
-@pg.production("expr : expr SLASH expr")
+@pg.production("expr : expr DIV expr")
+@pg.production("expr : expr MOD expr")
 @pg.production("expr : expr EQ expr", precedence="infix_operator")
 def bin_op_expr(s):
     ident = syntax.Ident(s[1].value)
-    return syntax.Call(syntax.Call(ident, s[0]), s[2])
+    return syntax.Call(ident, syntax.TupleLit(s[0], s[2]))
 
 
 parser = pg.build()

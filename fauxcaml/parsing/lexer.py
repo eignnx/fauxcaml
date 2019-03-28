@@ -20,12 +20,15 @@ lg.add("RPAREN", r"\)")
 
 lg.add("INT_LIT", r"\d+")
 lg.add("BOOL_LIT", r"true|false")
+
+lg.add("DIV", r"div")
+lg.add("MOD", r"mod")
+
 lg.add("IDENT", r"[a-zA-A_][a-zA-Z0-9'_]*")
 
 lg.add("PLUS", r"\+")
 lg.add("MINUS", r"-")
 lg.add("STAR", r"\*")
-lg.add("SLASH", r"/")
 
 lg.add("COMMA", f",")
 

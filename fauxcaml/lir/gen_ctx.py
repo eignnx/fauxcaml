@@ -1,17 +1,19 @@
 from __future__ import annotations
 
 import contextlib
+from collections import defaultdict
 from typing import List, Optional
 
 from fauxcaml.lir import lir
 
 
 class NasmGenCtx:
-    def __init__(self):
+    def __init__(self, generate_main=True):
         self.next_label_id = 0
+        self.local_names = defaultdict(self.new_temp64)
         self.statics: List[lir.Static] = []
-        self.current_fn: lir.FnDef = self.create_main_fn_def()
-        self.fns: List[lir.FnDef] = [self.current_fn]
+        self.current_fn: lir.FnDef = self.create_main_fn_def() if generate_main else None
+        self.fns: List[lir.FnDef] = [self.current_fn] if generate_main else []
 
     def create_main_fn_def(self):
         lbl = self.new_label("main")
@@ -39,7 +41,12 @@ class NasmGenCtx:
         new_fn_label = self.new_label(custom_fn_name)
         self.current_fn = lir.FnDef(new_fn_label)
         self.fns.append(self.current_fn)
+        old_local_names = self.local_names
+        self.local_names = defaultdict(self.new_temp64)
+
         yield (new_fn_label, self.current_fn.param)
+
+        self.local_names = old_local_names
         self.current_fn = old_fn_def
 
     def __str__(self) -> str:

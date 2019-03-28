@@ -1,54 +1,8 @@
-import subprocess
-
-import pytest
-
+import build
 from fauxcaml.lir import gen_ctx, lir, intrinsics
 
-ASM_FILE_NAME = "/tmp/fauxcaml.asm"
-OBJ_FILE_NAME = "/tmp/fauxcaml.o"
-EXE_FILE_NAME = "/tmp/fauxcaml"
 
-
-def assemble(ctx, f_in=ASM_FILE_NAME, f_out=OBJ_FILE_NAME):
-    ctx.write_to_file(f_in)
-    cmd = f"nasm -f elf64 {f_in} -o {f_out}"
-    return subprocess.run(cmd.split())
-
-
-def link(f_in=OBJ_FILE_NAME, f_out=EXE_FILE_NAME):
-    cmd = f"gcc {f_in} -o {f_out}"
-    return subprocess.run(cmd.split())
-
-
-def run(exe_name=EXE_FILE_NAME):
-    return subprocess.run([exe_name])
-
-
-def assert_assembles(ctx: gen_ctx.NasmGenCtx):
-    assert assemble(ctx).returncode == 0, "Failed to assemble with nasm!"
-
-
-def assert_main_returns(ctx, expected_ret_code=0):
-    """
-    Generates assembly, assembles, links, and runs the program. Checks that
-    the actual program's return code matches the expected return code.
-    """
-    ctx.write_to_file(ASM_FILE_NAME)
-    assert assemble(ctx).returncode == 0, "Failed to assemble with nasm!"
-    assert link().returncode == 0, "Failed to link with gcc!"
-    actual_ret_code = run().returncode
-    # Note: a unix process can only return one byte!
-    assert actual_ret_code == (expected_ret_code % 256)
-
-    if actual_ret_code != expected_ret_code:
-        import sys
-        print(
-            "\nWARNING: actual return code is congruent to expected return code "
-            "mod 256, but is not equivalent!",
-            file=sys.stderr
-        )
-
-
+@build.name_asm_file(__file__)
 def test_create_closure():
     ctx = gen_ctx.NasmGenCtx()
 
@@ -67,9 +21,10 @@ def test_create_closure():
         lir.Return(ret),
     ])
 
-    assert_main_returns(ctx, 111)
+    build.assert_main_returns(ctx, 111)
 
 
+@build.name_asm_file(__file__)
 def test_adder_factory():
     ctx = gen_ctx.NasmGenCtx()
 
@@ -99,9 +54,10 @@ def test_adder_factory():
         lir.Return(ret),
     ])
 
-    assert_main_returns(ctx, 77 + 99)
+    build.assert_main_returns(ctx, 77 + 99)
 
 
+@build.name_asm_file(__file__)
 def test_arithmetic_intrinsics():
     ctx = gen_ctx.NasmGenCtx()
 
@@ -120,9 +76,10 @@ def test_arithmetic_intrinsics():
         lir.Return(ret),
     ])
 
-    assert_main_returns(ctx, expected)
+    build.assert_main_returns(ctx, expected)
 
 
+@build.name_asm_file(__file__)
 def test_iterative_factorial():
     ctx = gen_ctx.NasmGenCtx()
 
@@ -184,4 +141,20 @@ def test_iterative_factorial():
         lir.Return(t0)
     ])
 
-    assert_main_returns(ctx, 120)
+    build.assert_main_returns(ctx, 120)
+
+
+@build.name_asm_file(__file__)
+def test_exit_intrinsic():
+    ctx = gen_ctx.NasmGenCtx()
+
+    t1 = ctx.new_temp64()
+
+    ctx.add_instrs([
+        intrinsics.Add(lir.I64(55), lir.I64(45), t1),
+        intrinsics.Exit(t1),
+        lir.Return(lir.I64(77)),
+    ])
+
+    build.assert_main_returns(ctx, 100)
+

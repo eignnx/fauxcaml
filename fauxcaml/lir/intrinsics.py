@@ -5,12 +5,11 @@ from dataclasses import dataclass
 from typing import Optional, List
 
 from fauxcaml.lir import lir, gen_ctx
-from fauxcaml.semantics import typ
 
 
 @dataclass
-class IntrinsicFn(lir.Instr, ABC):
-    signature: typ.Type
+class IntrinsicFnDef(lir.ToTgt, ABC):
+    pass
 
 
 @dataclass
@@ -51,13 +50,17 @@ class AddSub(IntrinsicCall):
     res: Optional[lir.Temp] = None
 
     def __post_init__(self):
-        assert self.op in {"add", "sub"}
+        assert self.op in {"+", "-"}
 
     @lir.ToTgt.annotate("AddSub", operation="op")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
+        op = {
+            "+": "add",
+            "-": "sub",
+        }[self.op]
         return [
             f"mov rax, {self.arg1.to_nasm_val(ctx)}",
-            f"{self.op} rax, {self.arg2.to_nasm_val(ctx)}",
+            f"{op} rax, {self.arg2.to_nasm_val(ctx)}",
         ] + ([
             f"mov {self.res.to_nasm_val(ctx)}, rax"
         ] if self.res is not None else [])
@@ -65,12 +68,12 @@ class AddSub(IntrinsicCall):
 
 # noinspection PyPep8Naming
 def Add(arg1: lir.Value, arg2: lir.Value, res: Optional[lir.Temp] = None) -> AddSub:
-    return AddSub("add", arg1, arg2, res)
+    return AddSub("+", arg1, arg2, res)
 
 
 # noinspection PyPep8Naming
 def Sub(arg1: lir.Value, arg2: lir.Value, res: Optional[lir.Temp] = None) -> AddSub:
-    return AddSub("sub", arg1, arg2, res)
+    return AddSub("-", arg1, arg2, res)
 
 
 @dataclass
@@ -81,13 +84,13 @@ class MulDivMod(IntrinsicCall):
     res: lir.Temp64
 
     def __post_init__(self):
-        assert self.op in {"mul", "div", "mod"}
+        assert self.op in {"*", "div", "mod"}
 
     @lir.ToTgt.annotate("MulDivMod", operation="op")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
 
         instr = {
-            "mul": "mul",
+            "*": "mul",
             "div": "div",
             "mod": "div",
         }[self.op]
@@ -109,7 +112,7 @@ class MulDivMod(IntrinsicCall):
 
 # noinspection PyPep8Naming
 def Mul(arg1: lir.Value, arg2: lir.Value, res: lir.Temp64) -> MulDivMod:
-    return MulDivMod("mul", arg1, arg2, res)
+    return MulDivMod("*", arg1, arg2, res)
 
 
 # noinspection PyPep8Naming
@@ -124,8 +127,8 @@ def Mod(arg1: lir.Value, arg2: lir.Value, res: lir.Temp64) -> MulDivMod:
 
 @dataclass
 class EqI64(IntrinsicCall):
-    arg1: lir.Temp64
-    arg2: lir.Temp64
+    arg1: lir.Value
+    arg2: lir.Value
     ret: lir.Temp64
 
     @lir.ToTgt.annotate("EqI64")
@@ -137,3 +140,15 @@ class EqI64(IntrinsicCall):
             f"mov {self.ret.to_nasm_val(ctx)}, rax",
         ]
 
+
+@dataclass
+class Exit(IntrinsicCall):
+    arg: lir.Value
+
+    @lir.ToTgt.annotate("Exit")
+    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
+        return [
+            f"mov rax, 60 ; code for `exit`",
+            f"mov rdi, {self.arg.to_nasm_val(ctx)}",
+            f"syscall",
+        ]
