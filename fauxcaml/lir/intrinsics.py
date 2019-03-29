@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC
 from dataclasses import dataclass
-from typing import Optional, List
+from typing import Optional, List, Any, ClassVar, Collection
 
 from fauxcaml.lir import lir, gen_ctx
 
@@ -41,7 +41,30 @@ class CreateTuple(IntrinsicCall):
 
 
 @dataclass
-class AddSub(IntrinsicCall):
+class BinOpCall(IntrinsicCall, ABC):
+
+    operations: ClassVar[Collection[str]] = {"+", "-", "*", "div", "mod", "="}
+
+    @staticmethod
+    def get_instr_constructor(op: str) -> Optional[Any]:
+        return {
+            "+": Add,
+            "-": Sub,
+            "*": Mul,
+            "div": Div,
+            "mod": Mod,
+            "=": EqI64,
+        }.get(op)
+
+    @staticmethod
+    def dispatch_on(op: str, arg1: lir.Value, arg2: lir.Value, ret: lir.Temp) -> BinOpCall:
+        instr_constructor = BinOpCall.get_instr_constructor(op)
+        assert instr_constructor is not None, f"Unknown bin op name '{op}'!"
+        return instr_constructor(arg1, arg2, ret)
+
+
+@dataclass
+class AddSub(BinOpCall):
     op: str
     arg1: lir.Value
     arg2: lir.Value
@@ -77,7 +100,7 @@ def Sub(arg1: lir.Value, arg2: lir.Value, res: Optional[lir.Temp] = None) -> Add
 
 
 @dataclass
-class MulDivMod(IntrinsicCall):
+class MulDivMod(BinOpCall):
     op: str
     arg1: lir.Value
     arg2: lir.Value
@@ -126,7 +149,7 @@ def Mod(arg1: lir.Value, arg2: lir.Value, res: lir.Temp64) -> MulDivMod:
 
 
 @dataclass
-class EqI64(IntrinsicCall):
+class EqI64(BinOpCall):
     arg1: lir.Value
     arg2: lir.Value
     ret: lir.Temp64

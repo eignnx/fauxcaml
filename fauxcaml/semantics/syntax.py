@@ -24,10 +24,6 @@ class AstNode(ABC):
     def to_lir(self, ctx: gen_ctx.NasmGenCtx) -> lir.Value:
         pass
 
-    # @abstractmethod
-    # def code_gen(self, ctx: gen_ctx.CodeGenContext) -> hir.Value:
-    #     pass
-
     @staticmethod
     def cache_type(fn: typing.Callable[[AstNode, check.Checker], typ.Type]):
         """
@@ -90,9 +86,6 @@ class Ident(Value):
     def to_lir(self, ctx: gen_ctx.NasmGenCtx) -> lir.Value:
         return ctx.local_names[self.name]
 
-    # def code_gen(self, ctx: gen_ctx.CodeGenContext) -> hir.Value:
-    #     return hir.Ident(self.name, self.type)
-
     def __str__(self):
         return self.name
 
@@ -118,9 +111,6 @@ class Const(Value):
             assert isinstance(self.value, int)
             return lir.I64(self.value)
         raise NotImplementedError
-
-    # def code_gen(self, ctx: gen_ctx.CodeGenContext) -> hir.Value:
-    #     return hir.Const(self.value, self.type)
 
     def __str__(self):
         return str(self.value)
@@ -148,11 +138,6 @@ class Lambda(AstNode):
         arg_type = checker.unifiers.concretize(arg_type)
 
         return typ.Fn(arg_type, body_type)
-
-    # def code_gen(self, ctx: gen_ctx.CodeGenContext) -> hir.Value:
-    #     with ctx.define_fn(self.param.name, self.type) as fn_label:
-    #         self.body.code_gen(ctx)
-    #     return fn_label
 
 
 @dataclass(eq=True)
@@ -183,76 +168,46 @@ class Call(AstNode):
         return checker.unifiers.concretize(beta)
 
     def to_lir(self, ctx: gen_ctx.NasmGenCtx) -> lir.Value:
-        ret = ctx.new_temp64()
         if isinstance(self.fn, Ident):
+
+            # We must first check to see if the instruction is one of the
+            # built-ins. These will be handled specially.
+
             if self.fn.name == "exit":
                 arg_tmp = self.arg.to_lir(ctx)
-                ctx.add_instr(
-                    intrinsics.Exit(arg_tmp)
-                )
+                instr = intrinsics.Exit(arg_tmp)
+                ctx.add_instr(instr)
                 return lir.Temp0()
-            elif self.fn.name in ("+", "-", "*", "div", "mod"):
-                instr = {
-                    "+": intrinsics.AddSub,
-                    "-": intrinsics.AddSub,
-                    "*": intrinsics.MulDivMod,
-                    "div": intrinsics.MulDivMod,
-                    "mod": intrinsics.MulDivMod,
-                }[self.fn.name]
 
+            elif self.fn.name in intrinsics.BinOpCall.operations:
+                ret = ctx.new_temp64()
                 assert isinstance(self.arg, TupleLit)
                 assert len(self.arg.vals) == 2
                 arg1, arg2 = self.arg.vals
-                ctx.add_instr(
-                    instr(
-                        self.fn.name,
-                        arg1.to_lir(ctx),
-                        arg2.to_lir(ctx),
-                        ret,
-                    )
+                instr = intrinsics.BinOpCall.dispatch_on(
+                    op=self.fn.name,
+                    arg1=arg1.to_lir(ctx),
+                    arg2=arg2.to_lir(ctx),
+                    ret=ret,
                 )
+                ctx.add_instr(instr)
                 return ret
+            else:
+                return self.to_lir_generalized(ctx)
+        else:
+            return self.to_lir_generalized(ctx)
 
-            elif self.fn.name == "=":
-                assert isinstance(self.arg, TupleLit)
-                assert len(self.arg.vals) == 2
-                arg1, arg2 = self.arg.vals
-                ctx.add_instr(
-                    intrinsics.EqI64(
-                        arg1.to_lir(ctx),
-                        arg2.to_lir(ctx),
-                        ret,
-                    )
-                )
-                return ret
+    def to_lir_generalized(self, ctx: gen_ctx.NasmGenCtx) -> lir.Value:
+        ret = ctx.new_temp64()
         arg_tmp = self.arg.to_lir(ctx)
         fn_tmp = self.fn.to_lir(ctx)
         if not isinstance(fn_tmp, lir.Temp64):
             msg = f"Cannot call something other than a 64-bit temporary as if it " \
                   f"were a closure! Given type '{type(fn_tmp)}'"
             raise ValueError(msg)
-        ctx.add_instr(
-            lir.CallClosure(
-                typing.cast(lir.Temp64, fn_tmp),
-                arg_tmp,
-                ret
-            )
-        )
+        instr = lir.CallClosure(fn_tmp, arg_tmp, ret)
+        ctx.add_instr(instr)
         return ret
-
-
-# def code_gen(self, ctx: gen_ctx.CodeGenContext) -> hir.Value:
-    #
-    #     # Generate code for function and arg.
-    #     fn_id = self.fn.code_gen(ctx)
-    #     arg_tmp = self.arg.code_gen(ctx)
-    #
-    #     # Create a new temporary for the return value.
-    #     ret = ctx.new_temp(self.type)
-    #
-    #     # Generate code for the call.
-    #     ctx.emit(hir.Call(ret, fn_id, arg_tmp))
-    #     return ret
 
 
 @dataclass(eq=True)
@@ -355,28 +310,10 @@ class Let(AstNode):
                 )
             )
         else:
-            tmp: lir.Temp = self.right.to_lir(ctx)
+            tmp = self.right.to_lir(ctx)
             ctx.local_names[self.left.name] = tmp
 
         return lir.Temp0()
-
-    # def code_gen(self, ctx: gen_ctx.CodeGenContext) -> hir.Value:
-    #
-    #     # First generate the right hand side of the binding.
-    #     right_tmp = self.right.code_gen(ctx)
-    #     left_tmp = self.left.code_gen(ctx)
-    #     left_tmp = typing.cast(hir.Ident, left_tmp)  # Cast to `hir.Ident` from `hir.Value`.
-    #
-    #     # Emit the binding `left = right`.
-    #     ctx.emit(hir.Store(left_tmp, right_tmp))
-    #
-    #     ret = ctx.new_temp(self.type)  # TODO: Optimize this away? Only need one return temporary?
-    #
-    #     # Generate code for the body, then save the result in ret.
-    #     body_tmp = self.body.code_gen(ctx)
-    #     ctx.emit(hir.Store(ret, body_tmp))
-    #
-    #     return ret
 
 
 @dataclass(eq=True)
