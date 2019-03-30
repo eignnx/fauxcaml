@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import os
 from collections import defaultdict
 from typing import List, Optional
 
@@ -79,7 +80,9 @@ class NasmGenCtx:
 
     def write_to_file(self, filename="./out.asm"):
         asm = str(self)
-        with open(filename, "w") as out:
+        basename = os.path.dirname(filename)
+        os.makedirs(basename, exist_ok=True)
+        with open(filename, "w+") as out:
             out.write(asm)
 
     def offset_of(self, temp: lir.Temp64):
