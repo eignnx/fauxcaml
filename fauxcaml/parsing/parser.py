@@ -48,6 +48,12 @@ def let_stmt(s):
     return syntax.LetStmt(decl["lhs"], decl["rhs"])
 
 
+@pg.production("let_stmt : LET REC decl SEMI_SEMI")
+def let_stmt(s):
+    decl = s[2]
+    return syntax.LetStmt(decl["lhs"], decl["rhs"])
+
+
 @pg.production("expr : IF expr THEN expr ELSE expr")
 def if_expr(s):
     return syntax.If(s[1], s[3], s[5])
