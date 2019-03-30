@@ -2,20 +2,24 @@ import contextlib
 import functools
 import os
 import subprocess
-from typing import Callable
+import sys
+from dataclasses import dataclass
+from typing import Callable, Union
 
+import parsing
 from lir import gen_ctx
+from semantics import check
 
-ASM_FILE_NAME = "/tmp/fauxcaml.asm"
-OBJ_FILE_NAME = "/tmp/fauxcaml.o"
-EXE_FILE_NAME = "/tmp/fauxcaml"
+ASM_FILE_NAME = "/tmp/fauxcaml_tests/fauxcaml.asm"
+OBJ_FILE_NAME = "/tmp/fauxcaml_tests/fauxcaml.o"
+EXE_FILE_NAME = "/tmp/fauxcaml_tests/fauxcaml"
 
 
 def set_out_file_names(name):
     global ASM_FILE_NAME, OBJ_FILE_NAME, EXE_FILE_NAME
-    ASM_FILE_NAME = f"/tmp/{name}.asm"
-    OBJ_FILE_NAME = f"/tmp/{name}.o"
-    EXE_FILE_NAME = f"/tmp/{name}"
+    ASM_FILE_NAME = f"/tmp/fauxcaml_tests/{name}.asm"
+    OBJ_FILE_NAME = f"/tmp/fauxcaml_tests/{name}.o"
+    EXE_FILE_NAME = f"/tmp/fauxcaml_tests/{name}"
 
 
 @contextlib.contextmanager
@@ -27,11 +31,19 @@ def tmp_asm_files_named(f_name):
     (ASM_FILE_NAME, OBJ_FILE_NAME, EXE_FILE_NAME) = old_paths
 
 
-def name_asm_file(module_path: str = "TEST"):
+def name_asm_file(module_path):
+    """
+    A decorator to put on top of tests which create asm, obj, and exe files.
+    Usually, you should pass `__file__` in as the module path.
+    EX:
+        @name_asm_file(__file__)
+        def test_my_feature():
+            ...
+    """
     base_name = os.path.basename(os.path.splitext(module_path)[0])
 
     def decorator(f: Callable):
-        f_name = f"{base_name}.{f.__qualname__}"
+        f_name = f"{base_name}/{f.__name__}"
 
         @functools.wraps(f)
         def new_f():
@@ -66,23 +78,55 @@ def assert_assembles(ctx: gen_ctx.NasmGenCtx):
     assert assemble(ctx).returncode == 0, "Failed to assemble with nasm!"
 
 
-def assert_main_returns(ctx: gen_ctx.NasmGenCtx, expected_ret_code=0):
-    """
-    Generates assembly, assembles, links, and runs the program. Checks that
-    the actual program's return code matches the expected return code.
-    """
-    ctx.write_to_file(ASM_FILE_NAME)
-    assert assemble(ctx).returncode == 0, "Failed to assemble with nasm!"
-    assert link().returncode == 0, "Failed to link with gcc!"
-    actual_ret_code = run().returncode
-    # Note: a unix process can only return one byte!
-    assert actual_ret_code == (expected_ret_code % 256)
+@dataclass(eq=False)
+class ExitCodeResult:
+    code: int
 
-    if actual_ret_code != expected_ret_code:
-        import sys
-        print(
-            "\nWARNING: actual return code is congruent to expected return code "
-            "mod 256, but is not equivalent!",
-            file=sys.stderr
-        )
+    def wraps(self) -> bool:
+        return self.code % 256 != self.code
+
+    def __str__(self):
+        return str(self.code)
+
+    def __eq__(self, other) -> bool:
+        if isinstance(other, int):
+            if (self.code % 256) == (other % 256):
+                if self.wraps():
+                    msg = (
+                        "\n"
+                        "WARNING: actual return code is congruent to expected "
+                        "return code mod 256, but is not equivalent!"
+                    )
+                    print(msg, file=sys.stderr)
+                return True
+            else:
+                return False
+
+
+def compile_src(src_txt: str) -> gen_ctx.NasmGenCtx:
+    checker = check.Checker()
+    ctx = gen_ctx.NasmGenCtx()
+
+    ast = parsing.parse(src_txt)
+    ast.infer_type(checker)
+    _ = ast.to_lir(ctx)
+    return ctx
+
+
+def exit_code_for(arg: Union[str, gen_ctx.NasmGenCtx]) -> ExitCodeResult:
+    """
+    Generates assembly, assembles, links, and runs the program.
+    """
+    if isinstance(arg, str):
+        ctx = compile_src(arg)
+    else:
+        ctx = arg
+
+    ctx.write_to_file(ASM_FILE_NAME)
+    if assemble(ctx).returncode != 0:
+        raise RuntimeError("Failed to assemble with nasm!")
+    if link().returncode != 0:
+        raise RuntimeError("Failed to link with gcc!")
+    exit_code = run().returncode
+    return ExitCodeResult(exit_code)
 

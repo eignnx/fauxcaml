@@ -1,4 +1,4 @@
-import build
+from fauxcaml import build
 from fauxcaml.lir import gen_ctx, lir, intrinsics
 
 
@@ -21,7 +21,7 @@ def test_create_closure():
         lir.Return(ret),
     ])
 
-    build.assert_main_returns(ctx, 111)
+    assert build.exit_code_for(ctx) == 111
 
 
 @build.name_asm_file(__file__)
@@ -54,7 +54,7 @@ def test_adder_factory():
         lir.Return(ret),
     ])
 
-    build.assert_main_returns(ctx, 77 + 99)
+    assert build.exit_code_for(ctx) == 77 + 99
 
 
 @build.name_asm_file(__file__)
@@ -76,7 +76,7 @@ def test_arithmetic_intrinsics():
         lir.Return(ret),
     ])
 
-    build.assert_main_returns(ctx, expected)
+    assert build.exit_code_for(ctx) == expected
 
 
 @build.name_asm_file(__file__)
@@ -141,7 +141,7 @@ def test_iterative_factorial():
         lir.Return(t0)
     ])
 
-    build.assert_main_returns(ctx, 120)
+    assert build.exit_code_for(ctx) == 120
 
 
 @build.name_asm_file(__file__)
@@ -156,5 +156,5 @@ def test_exit_intrinsic():
         lir.Return(lir.I64(77)),
     ])
 
-    build.assert_main_returns(ctx, 100)
+    assert build.exit_code_for(ctx) == 100
 
