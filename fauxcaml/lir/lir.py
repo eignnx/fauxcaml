@@ -3,7 +3,7 @@ from __future__ import annotations
 import functools
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Optional, List, Tuple, ClassVar, Dict
+from typing import Optional, List, ClassVar, Dict
 
 from fauxcaml.lir import gen_ctx
 
@@ -214,12 +214,16 @@ class EnvLookup(Instr):
     index: int
     res: Temp64
 
+    RECURSIVE_IDX: ClassVar[int] = 0
+
     @ToTgt.annotate("EnvLookup", index="index")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
         return GetElementPtr(
             ptr=ctx.current_fn.env,
 
             # Skip the fn ptr (label).
+            # Note: The *fn ptr* is different from the *closure pointer* (which
+            #       would be used when making a recursive call).
             index=self.index + 1,
 
             # Assumes all env elements are 8 bytes.
@@ -394,7 +398,7 @@ class Comment(Instr):
 
 @dataclass
 class IfFalse(Instr):
-    cond: Temp64
+    cond: Value
     label: Label
 
     @ToTgt.annotate("IfFalse")
@@ -429,3 +433,15 @@ class Return(Instr):
             *ctx.get_epilogue()
         ]
 
+
+@dataclass
+class Assign(Instr):
+    lhs: Temp
+    rhs: Value
+
+    @ToTgt.annotate("Assign")
+    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
+        return [
+            f"mov rax, {self.rhs.to_nasm_val(ctx)}",
+            f"mov {self.lhs.to_nasm_val(ctx)}, rax",
+        ]

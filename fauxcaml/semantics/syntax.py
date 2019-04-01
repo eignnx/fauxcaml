@@ -22,7 +22,7 @@ class AstNode(ABC):
 
     # @abstractmethod
     def to_lir(self, ctx: gen_ctx.NasmGenCtx) -> lir.Value:
-        pass
+        raise NotImplementedError
 
     @staticmethod
     def cache_type(fn: typing.Callable[[AstNode, check.Checker], typ.Type]):
@@ -84,7 +84,17 @@ class Ident(Value):
         return checker.duplicate_type(checker.type_env[self])
 
     def to_lir(self, ctx: gen_ctx.NasmGenCtx) -> lir.Value:
-        return ctx.local_names[self.name]
+        if self.name in ctx.local_names:
+            return ctx.local_names[self.name]
+        else:
+            tmp = ctx.new_temp64()
+            ctx.add_instr(
+                lir.EnvLookup(
+                    index=ctx.captured_names[self.name],
+                    res=tmp
+                )
+            )
+            return tmp
 
     def __str__(self):
         return self.name
@@ -230,35 +240,37 @@ class If(AstNode):
 
         return checker.unifiers.concretize(yes_type)
 
-    # def code_gen(self, ctx: gen_ctx.CodeGenContext) -> hir.Value:
-    #
-    #     # Setup a temporary for the return value of the expression.
-    #     ret = ctx.new_temp(self.type)
-    #
-    #     # Generate code for predicate.
-    #     pred_tmp = self.pred.code_gen(ctx)
-    #
-    #     # Make two new labels.
-    #     else_lbl = ctx.new_label()
-    #     end_lbl = ctx.new_label()
-    #
-    #     # Emit the conditional jump instr.
-    #     ctx.emit(hir.IfFalse(pred_tmp, else_lbl))
-    #
-    #     # Generate the yes branch, then add a "goto end".
-    #     yes_ret = self.yes.code_gen(ctx)
-    #     ctx.emit(hir.Store(ret, yes_ret))
-    #     ctx.emit(hir.Goto(end_lbl))
-    #
-    #     # Generate the else branch
-    #     ctx.emit(else_lbl)
-    #     no_ret = self.no.code_gen(ctx)
-    #     ctx.emit(hir.Store(ret, no_ret))
-    #
-    #     # Specify the end of the if statement
-    #     ctx.emit(end_lbl)
-    #
-    #     return ret
+    def to_lir(self, ctx: gen_ctx.NasmGenCtx) -> lir.Value:
+        # Setup a temporary for the return value of the expression.
+        ret = ctx.new_temp64()
+
+        # Generate code for predicate.
+        pred_tmp = self.pred.to_lir(ctx)
+
+        # Make two new labels.
+        else_lbl = ctx.new_label()
+        end_lbl = ctx.new_label()
+
+        # Emit the conditional jump instr.
+        ctx.add_instr(lir.IfFalse(pred_tmp, else_lbl))
+
+        # Generate the yes branch, then add a "goto end".
+        yes_ret = self.yes.to_lir(ctx)
+        ctx.add_instrs([
+            lir.Assign(ret, yes_ret),
+            lir.Goto(end_lbl),
+        ])
+
+        ctx.add_instr(else_lbl.as_instr())
+
+        # Generate the else branch
+        no_ret = self.no.to_lir(ctx)
+        ctx.add_instr(lir.Assign(ret, no_ret))
+
+        # Specify the end of the if statement
+        ctx.add_instr(end_lbl.as_instr())
+
+        return ret
 
 
 @dataclass(eq=True)
@@ -269,6 +281,7 @@ class Let(AstNode):
     left: Ident
     right: AstNode
     body: AstNode
+    recursive: bool = False
 
     @AstNode.cache_type
     def infer_type(self, checker: check.Checker) -> typ.Type:
@@ -294,26 +307,31 @@ class Let(AstNode):
             # With the environment set up, now the body can be typechecked.
             return self.body.infer_type(checker)
 
-    def to_lir(self, ctx: gen_ctx.NasmGenCtx) -> lir.Temp:
+    def to_lir(self, ctx: gen_ctx.NasmGenCtx) -> lir.Value:
         if isinstance(self.right, Lambda):
 
-            with ctx.inside_new_fn_def(self.left.name) as (lbl, param_tmp):
+            with ctx.new_fn_def(self.left.name, self.recursive) as (lbl, param_tmp):
                 param_name = self.right.param.name
                 ctx.local_names[param_name] = param_tmp
-                self.right.body.to_lir(ctx)
+                ret = self.right.body.to_lir(ctx)
+                ctx.add_instr(lir.Return(ret))
+
+            left_tmp = ctx.new_temp64()
+            ctx.local_names[self.left.name] = left_tmp
 
             ctx.add_instr(
                 lir.CreateClosure(
                     fn_lbl=lbl,
                     captures=[],
-                    ret=ctx.local_names[self.left.name],
+                    ret=left_tmp,
+                    recursive=self.recursive,
                 )
             )
         else:
             tmp = self.right.to_lir(ctx)
             ctx.local_names[self.left.name] = tmp
 
-        return lir.Temp0()
+        return self.body.to_lir(ctx)
 
 
 @dataclass(eq=True)
@@ -342,9 +360,6 @@ class TupleLit(AstNode):
 
         return res
 
-    # def code_gen(self, ctx: gen_ctx.CodeGenContext) -> hir.Value:
-    #     raise NotImplementedError
-
 
 @dataclass
 class LetStmt(AstNode):
@@ -357,6 +372,7 @@ class LetStmt(AstNode):
     """
     left: Ident
     right: AstNode
+    recursive: bool = False
 
     @AstNode.cache_type
     def infer_type(self, checker: check.Checker) -> typ.Type:
@@ -381,16 +397,21 @@ class LetStmt(AstNode):
     def to_lir(self, ctx: gen_ctx.NasmGenCtx) -> lir.Temp:
         if isinstance(self.right, Lambda):
 
-            with ctx.inside_new_fn_def(self.left.name) as (lbl, param_tmp):
+            with ctx.new_fn_def(self.left.name, self.recursive) as (lbl, param_tmp):
                 param_name = self.right.param.name
                 ctx.local_names[param_name] = param_tmp
-                self.right.body.to_lir(ctx)
+                ret = self.right.body.to_lir(ctx)
+                ctx.add_instr(lir.Return(ret))
+
+            left_tmp = ctx.new_temp64()
+            ctx.local_names[self.left.name] = left_tmp
 
             ctx.add_instr(
                 lir.CreateClosure(
                     fn_lbl=lbl,
                     captures=[],
-                    ret=ctx.local_names[self.left.name],
+                    ret=left_tmp,
+                    recursive=self.recursive
                 )
             )
         else:

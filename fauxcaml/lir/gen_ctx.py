@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import os
-from collections import defaultdict
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 from fauxcaml.lir import lir
 
@@ -11,7 +10,8 @@ from fauxcaml.lir import lir
 class NasmGenCtx:
     def __init__(self, generate_main=True):
         self.next_label_id = 0
-        self.local_names = defaultdict(self.new_temp64)
+        self.local_names: Dict[str, lir.Value] = dict()
+        self.captured_names: Dict[str, int] = dict()
         self.statics: List[lir.Static] = []
         self.current_fn: lir.FnDef = self.create_main_fn_def() if generate_main else None
         self.fns: List[lir.FnDef] = [self.current_fn] if generate_main else []
@@ -37,16 +37,21 @@ class NasmGenCtx:
         return self.current_fn.new_temp64()
 
     @contextlib.contextmanager
-    def inside_new_fn_def(self, custom_fn_name: Optional[str] = None):
+    def new_fn_def(self, custom_fn_name: Optional[str] = None, recursive: bool = False):
         old_fn_def = self.current_fn
         new_fn_label = self.new_label(custom_fn_name)
         self.current_fn = lir.FnDef(new_fn_label)
         self.fns.append(self.current_fn)
         old_local_names = self.local_names
-        self.local_names = defaultdict(self.new_temp64)
+        self.local_names = dict()
+        old_captured_names = self.captured_names
+        self.captured_names = {  # TODO: Correct to forget about outer captures?
+            custom_fn_name: lir.EnvLookup.RECURSIVE_IDX
+        } if recursive else dict()
 
         yield (new_fn_label, self.current_fn.param)
 
+        self.captured_names = old_captured_names
         self.local_names = old_local_names
         self.current_fn = old_fn_def
 

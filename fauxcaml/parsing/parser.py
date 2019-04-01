@@ -51,7 +51,7 @@ def let_stmt(s):
 @pg.production("let_stmt : LET REC decl SEMI_SEMI")
 def let_stmt(s):
     decl = s[2]
-    return syntax.LetStmt(decl["lhs"], decl["rhs"])
+    return syntax.LetStmt(decl["lhs"], decl["rhs"], recursive=True)
 
 
 @pg.production("expr : IF expr THEN expr ELSE expr")
@@ -62,7 +62,7 @@ def if_expr(s):
 @pg.production("expr : LET REC decl IN expr")
 def let_expr(s):
     decl = s[1]
-    return syntax.Let(decl["lhs"], decl["rhs"], s[3])
+    return syntax.Let(decl["lhs"], decl["rhs"], s[3], recursive=True)
 
 
 # TODO: Impl type checking for non-rec let exprs.

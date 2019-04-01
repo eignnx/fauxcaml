@@ -50,3 +50,15 @@ def test_two_parameter_function():
             x + y;;
         exit (add 100 50);;
     """) == 150
+
+
+@build.name_asm_file(__file__)
+def test_factorial():
+    assert build.exit_code_for("""
+        let rec fact n =
+            if n = 1
+            then 1
+            else n * (fact (n - 1))
+        ;;
+        exit (fact 5);;
+    """) == 120

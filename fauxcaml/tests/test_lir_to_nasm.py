@@ -6,7 +6,7 @@ from fauxcaml.lir import gen_ctx, lir, intrinsics
 def test_create_closure():
     ctx = gen_ctx.NasmGenCtx()
 
-    with ctx.inside_new_fn_def("my_closure") as (fn_lbl, param):
+    with ctx.new_fn_def("my_closure") as (fn_lbl, param):
         ctx.add_instrs([
             lir.Comment(">>> Inside closure"),
             intrinsics.Add(param, lir.I64(100))
@@ -28,14 +28,14 @@ def test_create_closure():
 def test_adder_factory():
     ctx = gen_ctx.NasmGenCtx()
 
-    with ctx.inside_new_fn_def("$adder$closure") as (adder_closure_lbl, y):
+    with ctx.new_fn_def("$adder$closure") as (adder_closure_lbl, y):
         x = ctx.new_temp64()
         ctx.add_instrs([
             lir.EnvLookup(0, x),
             intrinsics.Add(x, y)
         ])
 
-    with ctx.inside_new_fn_def("$adder") as (adder_lbl, x):
+    with ctx.new_fn_def("$adder") as (adder_lbl, x):
         ret = ctx.new_temp64()
         ctx.add_instrs([
             lir.CreateClosure(adder_closure_lbl, [x], ret),
@@ -80,10 +80,55 @@ def test_arithmetic_intrinsics():
 
 
 @build.name_asm_file(__file__)
+def test_recursive_factorial():
+    ctx = gen_ctx.NasmGenCtx()
+
+    with ctx.new_fn_def("fact") as (fact_lbl, n):
+        ret = ctx.new_temp64()
+        cond = ctx.new_temp64()
+        fact_rec = ctx.new_temp64()
+        t0 = ctx.new_temp64()
+        t1 = ctx.new_temp64()
+        t2 = ctx.new_temp64()
+        else_block = ctx.new_label("else_block")
+        end_block = ctx.new_label("end_block")
+
+        ctx.add_instrs([
+            intrinsics.EqI64(n, lir.I64(0), cond),
+            lir.IfFalse(cond, else_block),
+            *[
+                lir.Assign(ret, lir.I64(1)),
+                lir.Goto(end_block),
+            ],
+            else_block.as_instr(),
+            *[
+                intrinsics.Sub(n, lir.I64(1), t0),
+                lir.EnvLookup(lir.EnvLookup.RECURSIVE_IDX, fact_rec),
+                lir.CallClosure(fact_rec, t0, t1),
+                intrinsics.Mul(n, t1, t2),
+                lir.Assign(ret, t2),
+            ],
+            end_block.as_instr(),
+            lir.Return(ret),
+        ])
+
+    fact = ctx.new_temp64()
+    t0 = ctx.new_temp64()
+
+    ctx.add_instrs([
+        lir.CreateClosure(fact_lbl, [], fact, recursive=True),
+        lir.CallClosure(fact, lir.I64(5), t0),
+        lir.Return(t0)
+    ])
+
+    assert build.exit_code_for(ctx) == 120
+
+
+@build.name_asm_file(__file__)
 def test_iterative_factorial():
     ctx = gen_ctx.NasmGenCtx()
 
-    with ctx.inside_new_fn_def("$iter") as (iter_lbl, tup):
+    with ctx.new_fn_def("$iter") as (iter_lbl, tup):
         i = ctx.new_temp64()
         acc = ctx.new_temp64()
         env_n = ctx.new_temp64()
@@ -102,7 +147,7 @@ def test_iterative_factorial():
         ctx.add_instrs([
             lir.GetElementPtr(tup, index=0, stride=8, res=i),
             lir.GetElementPtr(tup, index=1, stride=8, res=acc),
-            lir.EnvLookup(0, env_n),
+            lir.EnvLookup(lir.EnvLookup.RECURSIVE_IDX, env_n),
             intrinsics.EqI64(i, env_n, cond),
             lir.IfFalse(cond, _else),
             *[
@@ -121,7 +166,7 @@ def test_iterative_factorial():
             lir.Return(ret)
         ])
 
-    with ctx.inside_new_fn_def("$fact") as (fact_lbl, n):
+    with ctx.new_fn_def("$fact") as (fact_lbl, n):
         iter = ctx.new_temp64()
         tup = ctx.new_temp64()
         t1 = ctx.new_temp64()
