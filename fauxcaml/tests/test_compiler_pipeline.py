@@ -25,22 +25,20 @@ def test_global_variable_lookup():
 
 @build.name_asm_file(__file__)
 def test_chained_global_variable_lookup():
-    assert build.exit_code_for(
-        """
+    assert build.exit_code_for("""
         let x = 7;;
         let y = x * 4;;
         let z = x + y + 45;;
         exit z;;
-        """
-    ) == 7 + (7 * 4) + 45
+    """) == 7 + (7 * 4) + 45
 
 
 @build.name_asm_file(__file__)
 def test_global_function_definition():
     assert build.exit_code_for("""
         let f x = x + 1;;
-        exit (f 1000);;
-    """) == 1001
+        exit (f 100);;
+    """) == 101
 
 
 @build.name_asm_file(__file__)
