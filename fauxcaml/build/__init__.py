@@ -6,9 +6,9 @@ import sys
 from dataclasses import dataclass
 from typing import Callable, Union
 
-import parsing
-from lir import gen_ctx
-from semantics import check
+from fauxcaml import parsing
+from fauxcaml.lir import gen_ctx
+from fauxcaml.semantics import check
 
 ASM_FILE_NAME = "/tmp/fauxcaml_tests/fauxcaml.asm"
 OBJ_FILE_NAME = "/tmp/fauxcaml_tests/fauxcaml.o"
