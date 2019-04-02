@@ -79,10 +79,10 @@ $ which python3.7 # This must print something!
 $ git clone https://github.com/eignnx/fauxcaml.git
 $ cd fauxcaml
 
-$ # *** set up a python virtual environment ***
-
+$ python -m venv venv
 $ source venv/bin/activate
 $ pip install -r requirements.txt
+
 $ pytest
 
 ```
