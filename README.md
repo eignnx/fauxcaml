@@ -103,4 +103,8 @@ The `./fauxcaml` directory defines a top-level package. It contains the followin
 * `fauxcaml.lir`: Defines the *low-level intermediate representation*. This acts as an API for programmatically constructing assembly files.
 * `fauxcaml.hir`: Currently not used, but may be used as a layer between `lir` and the AST.
 * `fauxcaml.build`: Contains high-level functions for compiling, assembling, and linking. 
+<<<<<<< HEAD
 * `fauxcaml.utils`: Random utility functions go here.
+=======
+* `fauxcaml.utils`: Random utility functions go here.
+>>>>>>> 0ea66fe3a12b6483294215e0e6e345995ebc9d89
