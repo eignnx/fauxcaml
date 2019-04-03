@@ -1,3 +1,5 @@
+import pytest
+
 from fauxcaml import build
 
 
@@ -41,12 +43,13 @@ def test_global_function_definition():
     """) == 101
 
 
+@pytest.mark.xfail
 @build.name_asm_file(__file__)
 def test_two_parameter_function():
     assert build.exit_code_for("""
-        let add x y =
+        let plus x y =
             x + y;;
-        exit (add 100 50);;
+        exit (plus 100 50);;
     """) == 150
 
 
