@@ -54,6 +54,20 @@ def test_two_parameter_function():
 
 
 @build.name_asm_file(__file__)
+def test_nested_if_expressions():
+    assert build.exit_code_for("""
+        let res =
+            if 1 = 1
+            then if 3 = 4
+                 then 5
+                 else 6
+            else 7
+        ;;
+        exit res;;
+    """) == 6
+
+
+@build.name_asm_file(__file__)
 def test_factorial():
     assert build.exit_code_for("""
         let rec fact n =
