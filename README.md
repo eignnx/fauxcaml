@@ -3,6 +3,43 @@
 
 The `fauxcaml` compiler can convert very simple OCaml code to 86x-64 ([NASM](https://en.wikipedia.org/wiki/Netwide_Assembler) flavored) assembly.
 
+## Installing
+
+The codebase used recent features of Python quite extensively ([dataclasses](https://docs.python.org/3/library/dataclasses.html), [f-strings](https://www.python.org/dev/peps/pep-0498/)), so your system must have at least Python 3.7 installed.
+
+```shell
+$ which python3.7 # This must print something!
+/path/to/my/python3.7
+
+$ git clone https://github.com/eignnx/fauxcaml.git
+$ cd fauxcaml
+
+$ python -m venv venv
+$ source venv/bin/activate
+$ pip install -r requirements.txt
+
+```
+
+## Compiling a Program
+
+Assuming your OCaml program is in a file called `test.ml`:
+
+```shell
+$ fauxcamlc test.ml
+```
+
+To run the executable produced:
+
+```shell
+$ ./test
+```
+
+## Running the Unit Tests
+
+```shell
+$ pytest
+```
+
 ## Compilation Example
 
 The following OCaml program...
@@ -67,25 +104,6 @@ section .text
 ## Contributing
 
 I am open to contributions but it might be wise to wait until things stabilize a bit more (as of April 1st, 2019). If you're interested in contributing, please open an issue titled something like "can i help?", and I'll see what I can do to bring you on board!
-
-## Installing and Running the Tests
-
-The codebase used recent features of Python quite extensively ([dataclasses](https://docs.python.org/3/library/dataclasses.html), [f-strings](https://www.python.org/dev/peps/pep-0498/)), so your system must have at least Python 3.7 installed.
-
-```shell
-$ which python3.7 # This must print something!
-/path/to/my/python3.7
-
-$ git clone https://github.com/eignnx/fauxcaml.git
-$ cd fauxcaml
-
-$ python -m venv venv
-$ source venv/bin/activate
-$ pip install -r requirements.txt
-
-$ pytest
-
-```
 
 ## Project Structure
 

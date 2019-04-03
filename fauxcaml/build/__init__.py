@@ -4,7 +4,7 @@ import os
 import subprocess
 import sys
 from dataclasses import dataclass
-from typing import Callable, Union
+from typing import Callable, Union, Optional
 
 from fauxcaml import parsing
 from fauxcaml.lir import gen_ctx
@@ -54,24 +54,24 @@ def name_asm_file(module_path):
     return decorator
 
 
-def assemble(ctx, f_in=None, f_out=None):
-    f_in = ASM_FILE_NAME if f_in is None else f_in
-    f_out = OBJ_FILE_NAME if f_out is None else f_out
-    ctx.write_to_file(f_in)
-    cmd = f"nasm -f elf64 {f_in} -o {f_out}"
+def assemble(ctx, asm_file=None, obj_file=None):
+    asm_file = ASM_FILE_NAME if asm_file is None else asm_file
+    obj_file = OBJ_FILE_NAME if obj_file is None else obj_file
+    ctx.write_to_file(asm_file)
+    cmd = f"nasm -f elf64 {asm_file} -o {obj_file}"
     return subprocess.run(cmd.split())
 
 
-def link(f_in=None, f_out=None):
-    f_in = OBJ_FILE_NAME if f_in is None else f_in
-    f_out = EXE_FILE_NAME if f_out is None else f_out
-    cmd = f"gcc {f_in} -o {f_out}"
+def link(obj_file=None, exe_file=None):
+    obj_file = OBJ_FILE_NAME if obj_file is None else obj_file
+    exe_file = EXE_FILE_NAME if exe_file is None else exe_file
+    cmd = f"gcc {obj_file} -o {exe_file}"
     return subprocess.run(cmd.split())
 
 
-def run(exe_name=None):
-    exe_name = EXE_FILE_NAME if exe_name is None else exe_name
-    return subprocess.run([exe_name])
+def run(exe_file=None):
+    exe_file = EXE_FILE_NAME if exe_file is None else exe_file
+    return subprocess.run([exe_file])
 
 
 def assert_assembles(ctx: gen_ctx.NasmGenCtx):
@@ -130,3 +130,16 @@ def exit_code_for(arg: Union[str, gen_ctx.NasmGenCtx]) -> ExitCodeResult:
     exit_code = run().returncode
     return ExitCodeResult(exit_code)
 
+
+def compile_from_source_file(source_file: str, exe_file: Optional[str] = None):
+    with open(source_file, "r") as f:
+        ctx = compile_src(f.read())
+
+    base_name = os.path.basename(os.path.splitext(source_file)[0])
+    asm_file = f"./{base_name}.asm"
+    obj_file = f"./{base_name}.o"
+    exe_file = f"./{base_name}" if exe_file is None else exe_file
+    if assemble(ctx, asm_file=asm_file, obj_file=obj_file).returncode != 0:
+        raise RuntimeError("Failed to assemble with nasm!")
+    if link(obj_file=obj_file, exe_file=exe_file).returncode != 0:
+        raise RuntimeError("Failed to link with gcc!")
