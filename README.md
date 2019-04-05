@@ -7,17 +7,19 @@ The `fauxcaml` compiler can convert very simple OCaml code to 86x-64 ([NASM](htt
 
 The codebase used recent features of Python quite extensively ([dataclasses](https://docs.python.org/3/library/dataclasses.html), [f-strings](https://www.python.org/dev/peps/pep-0498/)), so your system must have at least Python 3.7 installed.
 
-```shell
-$ which python3.7 # This must print something!
-/path/to/my/python3.7
+### Ensure Python 3.7 Installed
+Python 3.7 must be installed at the following location: `/usr/local/bin/python3.7`. Test to make sure this is the case.
 
+```shell
+$ if [ -f /usr/local/bin/python3.7 ]; then echo good; else echo bad; fi
+```
+
+### Clone and Install
+
+```shell
 $ git clone https://github.com/eignnx/fauxcaml.git
 $ cd fauxcaml
-
-$ python -m venv venv
-$ source venv/bin/activate
-$ pip install -r requirements.txt
-
+$ bash install.sh  # Installs the `fauxcamlc` cli tool.
 ```
 
 ## Compiling a Program
