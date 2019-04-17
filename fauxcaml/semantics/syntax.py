@@ -24,6 +24,16 @@ class AstNode(ABC):
     def to_lir(self, ctx: gen_ctx.NasmGenCtx) -> lir.Value:
         raise NotImplementedError
 
+    @abstractmethod
+    def captures(self) -> typing.Set[Ident]:
+        """
+        Returns a set of all captured variables ie those variables that are used
+        in the current `AstNode` (`self`), but not defined in the current
+        `AstNode`. See http://matt.might.net/articles/closure-conversion/
+        for discussion and example implementation in Racket.
+        """
+        pass
+
     @staticmethod
     def cache_type(fn: typing.Callable[[AstNode, check.Checker], typ.Type]):
         """
@@ -96,6 +106,9 @@ class Ident(Value):
             )
             return tmp
 
+    def captures(self) -> typing.Set[Ident]:
+        return {self}
+
     def __str__(self):
         return self.name
 
@@ -121,6 +134,9 @@ class Const(Value):
             assert isinstance(self.value, int)
             return lir.I64(self.value)
         raise NotImplementedError
+
+    def captures(self) -> typing.Set[Ident]:
+        return set()
 
     def __str__(self):
         return str(self.value)
@@ -151,6 +167,9 @@ class Lambda(AstNode):
 
     def to_lir(self, ctx: gen_ctx.NasmGenCtx) -> lir.Value:
         raise NotImplementedError
+
+    def captures(self) -> typing.Set[Ident]:
+        return self.body.captures() - {self.param}
 
 
 @dataclass(eq=True)
@@ -222,6 +241,9 @@ class Call(AstNode):
         ctx.add_instr(instr)
         return ret
 
+    def captures(self) -> typing.Set[Ident]:
+        return self.fn.captures() | self.arg.captures()
+
 
 @dataclass(eq=True)
 class If(AstNode):
@@ -274,6 +296,9 @@ class If(AstNode):
         ctx.add_instr(end_lbl.as_instr())
 
         return ret
+
+    def captures(self) -> typing.Set[Ident]:
+        return self.pred.captures() | self.yes.captures() | self.no.captures()
 
 
 @dataclass(eq=True)
@@ -336,6 +361,9 @@ class Let(AstNode):
 
         return self.body.to_lir(ctx)
 
+    def captures(self) -> typing.Set[Ident]:
+        return (self.body.captures() | self.right.captures()) - {self.left}
+
 
 @dataclass(eq=True)
 class TupleLit(AstNode):
@@ -362,6 +390,13 @@ class TupleLit(AstNode):
         )
 
         return res
+
+    def captures(self) -> typing.Set[Ident]:
+        return {  # The poor-lang's flatmap.
+            capture
+            for val in self.vals
+            for capture in val.captures()
+        }
 
 
 @dataclass
@@ -423,6 +458,9 @@ class LetStmt(AstNode):
 
         return lir.Temp0()
 
+    def captures(self) -> typing.Set[Ident]:
+        return self.right.captures() - {self.left}
+
 
 @dataclass
 class TopLevelStmts(AstNode):
@@ -438,6 +476,13 @@ class TopLevelStmts(AstNode):
         for stmt in self.stmts:
             stmt.to_lir(ctx)
         return lir.Temp0()
+
+    def captures(self) -> typing.Set[Ident]:
+        return {  # The poor-lang's flatmap.
+            capture
+            for stmt in self.stmts
+            for capture in stmt.captures()
+        }
 
     def __add__(self, other):
         return TopLevelStmts(self.stmts + other.stmts)
