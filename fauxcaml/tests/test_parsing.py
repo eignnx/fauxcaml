@@ -107,3 +107,19 @@ def test_stmt_parsing():
 
     assert actual == expected
 
+
+def test_let_rec_in():
+    actual = parsing.parse_expr("""
+        let rec f x = 12 in
+        x
+    """)
+
+    expected = Let(
+        Ident("f"),
+        Lambda(Ident("x"), Const(12, Int)),
+        Ident("x"),
+        recursive=True,
+    )
+
+    assert actual == expected
+
