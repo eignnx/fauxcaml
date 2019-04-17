@@ -29,4 +29,5 @@ def std_env(checker: check.Checker) -> env.Env[syntax.Ident, typ.Type]:
         syntax.Ident("="): typ.Fn(typ.Tuple(typ.Int, typ.Int), typ.Bool),
 
         syntax.Ident("exit"): typ.Fn(typ.Int, typ.Unit),
+        syntax.Ident("print_int"): typ.Fn(typ.Int, typ.Unit),
     })

@@ -65,11 +65,15 @@ class NasmGenCtx:
     def emit_exports(self, asm):
         asm += [
             "extern malloc",
+            "extern printf",
             "global main",
         ]
 
     def emit_data_section(self, asm):
         asm.append("section .data")
+
+        # Define `printf`-style format string for printing integers.
+        asm.append("$println_int_fmt db '%d', 0xa, 0x0")
 
         for static in self.statics:
             asm.append(static.to_nasm_val(self))  # Todo: These probably aren't values...

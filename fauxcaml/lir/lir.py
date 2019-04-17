@@ -80,7 +80,7 @@ class Static(Value):
     value: Value
 
     def to_nasm_val(self, ctx: gen_ctx.NasmGenCtx) -> str:
-        return ""
+        raise NotImplementedError
 
 
 class Instr(ToTgt, ABC):

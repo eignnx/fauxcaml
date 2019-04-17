@@ -211,6 +211,13 @@ class Call(AstNode):
                 ctx.add_instr(instr)
                 return lir.Temp0()
 
+            if self.fn.name == "print_int":
+                arg_tmp = self.arg.to_lir(ctx)
+                instr = intrinsics.PrintInt(arg_tmp)
+                ctx.add_instr(instr)
+                return lir.Temp0()
+
+
             elif self.fn.name in intrinsics.BinOpCall.operations:
                 ret = ctx.new_temp64()
                 assert isinstance(self.arg, TupleLit)
