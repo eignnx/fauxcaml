@@ -20,7 +20,7 @@ class AstNode(ABC):
     def infer_type(self, checker: check.Checker) -> typ.Type:
         pass
 
-    # @abstractmethod
+    @abstractmethod
     def to_lir(self, ctx: gen_ctx.NasmGenCtx) -> lir.Value:
         raise NotImplementedError
 
@@ -148,6 +148,9 @@ class Lambda(AstNode):
         arg_type = checker.unifiers.concretize(arg_type)
 
         return typ.Fn(arg_type, body_type)
+
+    def to_lir(self, ctx: gen_ctx.NasmGenCtx) -> lir.Value:
+        raise NotImplementedError
 
 
 @dataclass(eq=True)
