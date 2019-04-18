@@ -46,9 +46,9 @@ def name_asm_file(module_path):
         f_name = f"{base_name}/{f.__name__}"
 
         @functools.wraps(f)
-        def new_f():
+        def new_f(*args, **kwargs):
             with tmp_asm_files_named(f_name):
-                f()
+                f(*args, **kwargs)
 
         return new_f
     return decorator
@@ -69,9 +69,9 @@ def link(obj_file=None, exe_file=None):
     return subprocess.run(cmd.split())
 
 
-def run(exe_file=None):
+def run(exe_file=None, **subprocess_args):
     exe_file = EXE_FILE_NAME if exe_file is None else exe_file
-    return subprocess.run([exe_file])
+    return subprocess.run([exe_file], **subprocess_args)
 
 
 def assert_assembles(ctx: gen_ctx.NasmGenCtx):
@@ -143,3 +143,23 @@ def compile_from_source_file(source_file: str, exe_file: Optional[str] = None):
         raise RuntimeError("Failed to assemble with nasm!")
     if link(obj_file=obj_file, exe_file=exe_file).returncode != 0:
         raise RuntimeError("Failed to link with gcc!")
+
+
+def stdout_log_for(arg: Union[str, gen_ctx.NasmGenCtx], capsys) -> str:
+    if isinstance(arg, str):
+        ctx = compile_src(arg)
+    else:
+        ctx = arg
+
+    ctx.write_to_file(ASM_FILE_NAME)
+    if assemble(ctx).returncode != 0:
+        raise RuntimeError("Failed to assemble with nasm!")
+    if link().returncode != 0:
+        raise RuntimeError("Failed to link with gcc!")
+
+    with capsys.disabled():
+        proc = run(stdout=subprocess.PIPE)
+        bstr = proc.stdout
+        return bstr.decode("utf-8")
+
+

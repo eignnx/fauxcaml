@@ -90,3 +90,13 @@ def test_nested_let_expr():
         ;;
         exit (my_main 0);;
     """) == 3
+
+
+@pytest.mark.xfail
+@build.name_asm_file(__file__)
+def test_print_int(capsys):
+    assert build.stdout_log_for("""
+        print_int 123456789;;
+        print_int 987654321;;
+        exit 0;;
+    """, capsys) == "123456789\n987654321\n"
