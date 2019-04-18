@@ -100,3 +100,12 @@ def test_print_int(capsys):
         print_int 987654321;;
         exit 0;;
     """, capsys) == "123456789\n987654321\n"
+
+
+@build.name_asm_file(__file__)
+def test_reassigning_exit():
+    assert build.exit_code_for("""
+        let my_exit = exit;;
+        my_exit 12;;
+        exit 99;;
+    """) == 12

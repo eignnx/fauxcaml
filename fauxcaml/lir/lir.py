@@ -337,19 +337,19 @@ class FnDef(ToTgt):
     env: Temp = field(default_factory=param_factory(ENV_ID))
     body: List[Instr] = field(default_factory=list)
 
-    locals: Dict[Temp, int] = field(default_factory=dict)
+    temporaries: Dict[Temp, int] = field(default_factory=dict)
     current_offset: int = 0  # Base ptr and return addr stored first
     next_temp_id: int = 0
 
     def __post_init__(self):
         # The param is always located 16 bytes above [rbp], and the env ptr
         # is 24 bytes above [rbp].
-        self.locals[self.param] = +16
-        self.locals[self.env] = +24
+        self.temporaries[self.param] = +16
+        self.temporaries[self.env] = +24
 
     def local_alloca_size(self) -> int:
         return sum(
-            local.size() for local in self.locals.keys()
+            local.size() for local in self.temporaries.keys()
             if local not in [self.param, self.env]
         )
 
@@ -384,7 +384,7 @@ class FnDef(ToTgt):
 
         # Store and update the offset into the stack
         self.current_offset -= t.size()  # Subtract because the stack grows down!
-        self.locals[t] = self.current_offset
+        self.temporaries[t] = self.current_offset
         return t
 
 
@@ -427,9 +427,11 @@ class Return(Instr):
 
     @ToTgt.annotate("Return")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
-        return [
+        return ([
             f"mov rax, {self.value.to_nasm_val(ctx)}",
-        ] + [
+        ] if self.value.SIZE > 0 else [
+            f"xor rax, rax ; Zero out `rax`.",
+        ]) + [
             *ctx.get_epilogue()
         ]
 

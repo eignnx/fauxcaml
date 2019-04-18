@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Callable, Union, Optional
 
 from fauxcaml import parsing
+from fauxcaml import prelude
 from fauxcaml.lir import gen_ctx
 from fauxcaml.semantics import check
 
@@ -104,11 +105,13 @@ class ExitCodeResult:
 
 
 def compile_src(src_txt: str) -> gen_ctx.NasmGenCtx:
-    checker = check.Checker()
-    ctx = gen_ctx.NasmGenCtx()
-
     ast = parsing.parse(src_txt)
+
+    checker = check.Checker()
     ast.infer_type(checker)
+
+    ctx = gen_ctx.NasmGenCtx()
+    prelude.add_to_ctx(ctx)
     _ = ast.to_lir(ctx)
     return ctx
 

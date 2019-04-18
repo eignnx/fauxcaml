@@ -8,13 +8,15 @@ from fauxcaml.lir import lir
 
 
 class NasmGenCtx:
-    def __init__(self, generate_main=True):
+    def __init__(self):
         self.next_label_id = 0
-        self.local_names: Dict[str, lir.Value] = dict()
-        self.captured_names: Dict[str, int] = dict()
         self.statics: List[lir.Static] = []
-        self.current_fn: lir.FnDef = self.create_main_fn_def() if generate_main else None
-        self.fns: List[lir.FnDef] = [self.current_fn] if generate_main else []
+        self.captured_names: Dict[str, int] = dict()
+        self.local_names: Dict[str, lir.Value] = dict()
+        self.main_fn_def: Optional[lir.FnDef] = self.create_main_fn_def()
+        self.main_local_names = self.local_names
+        self.current_fn: Optional[lir.FnDef] = self.main_fn_def
+        self.fns: List[lir.FnDef] = [self.current_fn]
 
     def create_main_fn_def(self):
         lbl = self.new_label("main")
@@ -35,6 +37,41 @@ class NasmGenCtx:
 
     def new_temp64(self) -> lir.Temp64:
         return self.current_fn.new_temp64()
+
+    @contextlib.contextmanager
+    def inside_main(self):
+        old_fn_def = self.current_fn
+        self.current_fn = self.main_fn_def
+        old_local_names = self.local_names
+        self.local_names = self.main_local_names
+        old_captured_names = self.captured_names
+        self.captured_names = {}  # TODO: What to put here?
+        yield
+        self.captured_names = old_captured_names
+        self.local_names = old_local_names
+        self.current_fn = old_fn_def
+
+    @contextlib.contextmanager
+    def new_prelude_fn_def(
+            self,
+            fn_name: str,
+            fn_lbl_name: Optional[str] = None,
+            recursive: bool = False
+    ):
+        with self.new_fn_def(fn_lbl_name, recursive=recursive) as (lbl, param):
+            yield (lbl, param)
+
+        with self.inside_main():
+            closure_temp = self.new_temp64()
+            self.local_names[fn_name] = closure_temp
+            self.main_fn_def.body.append(
+                lir.CreateClosure(
+                    fn_lbl=lbl,
+                    captures=[],
+                    ret=closure_temp,
+                    recursive=recursive
+                )
+            )
 
     @contextlib.contextmanager
     def new_fn_def(self, custom_fn_name: Optional[str] = None, recursive: bool = False):
@@ -95,7 +132,7 @@ class NasmGenCtx:
             out.write(asm)
 
     def offset_of(self, temp: lir.Temp64):
-        return self.current_fn.locals[temp]
+        return self.current_fn.temporaries[temp]
 
     def get_epilogue(self) -> List[str]:
         return self.current_fn.get_epilogue()
