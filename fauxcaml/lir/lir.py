@@ -104,9 +104,10 @@ class Instr(ToTgt, ABC):
 
 @dataclass
 class Nasm(Instr):
+    description: str
     lines: List[str]
 
-    @ToTgt.annotate("Nasm")
+    @ToTgt.annotate("Nasm", description="description")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
         return self.lines
 
