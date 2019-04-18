@@ -106,14 +106,15 @@ class NasmGenCtx:
             "global main",
         ]
 
+        asm.append("")
+
     def emit_data_section(self, asm):
         asm.append("section .data")
 
-        # Define `printf`-style format string for printing integers.
-        asm.append("$println_int_fmt db '%d', 0xa, 0x0")
-
         for static in self.statics:
-            asm.append(static.to_nasm_val(self))  # Todo: These probably aren't values...
+            asm.append("    " + static.to_nasm_val(self))
+
+        asm.append("")
 
     def emit_text_section(self, asm):
         asm.append("section .text")

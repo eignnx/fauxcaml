@@ -184,7 +184,7 @@ class PrintInt(IntrinsicCall):
     @lir.ToTgt.annotate("PrintInt")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
         return [
-            f"mov rdi, $println_int_fmt",
+            f"mov rdi, _$print_int_fmt_str",
             f"mov rsi, {self.arg.to_nasm_val(ctx)}",
             f"call printf",
         ]

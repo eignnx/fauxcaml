@@ -3,7 +3,7 @@ from __future__ import annotations
 import functools
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Optional, List, ClassVar, Dict
+from typing import Optional, List, ClassVar, Dict, Union
 
 from fauxcaml.lir import gen_ctx
 
@@ -76,11 +76,26 @@ class Value(ToTgtVal, ABC):
 
 
 @dataclass
-class Static(Value):
-    value: Value
+class Static(Value, ABC):
+    pass
+
+
+@dataclass
+class StaticByteArray(Static):
+    label: Label
+    components: List[Union[str, int]]
+
+    @staticmethod
+    def mapper(comp: Union[str, int]):
+        if type(comp) is int:
+            return f"0x{comp:x}"  # Format in hex.
+        elif type(comp) is str:
+            return repr(comp)  # Put in quotes.
 
     def to_nasm_val(self, ctx: gen_ctx.NasmGenCtx) -> str:
-        raise NotImplementedError
+        comps = ", ".join(self.mapper(comp) for comp in self.components)
+        lbl = self.label.as_value().to_nasm_val(ctx)
+        return f"{lbl} db {comps}"
 
 
 class Instr(ToTgt, ABC):
