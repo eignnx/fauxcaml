@@ -109,3 +109,13 @@ def test_reassigning_exit():
         my_exit 12;;
         exit 99;;
     """) == 12
+
+
+@pytest.mark.xfail
+@build.name_asm_file(__file__)
+def test_wrapping_exit():
+    assert build.exit_code_for("""
+        let my_exit x = exit x;;
+        my_exit 12;;
+        exit 99;;
+    """) == 12
