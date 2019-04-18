@@ -137,3 +137,16 @@ class NasmGenCtx:
 
     def get_epilogue(self) -> List[str]:
         return self.current_fn.get_epilogue()
+
+    @contextlib.contextmanager
+    def annotation(self, tag_name, **attrs):
+        props = "".join(
+            f" {prop}=\"{eval(expr, globals())}\""
+            for prop, expr in attrs.items()
+        )
+
+        start_tag = f"<{tag_name}{props}>"
+        end_tag = f"<{tag_name}>"
+        self.add_instr(lir.Comment(start_tag, prefix=" "))
+        yield
+        self.add_instr(lir.Comment(end_tag, prefix=" "))
