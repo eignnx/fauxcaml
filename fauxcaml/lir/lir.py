@@ -103,6 +103,15 @@ class Instr(ToTgt, ABC):
 
 
 @dataclass
+class Nasm(Instr):
+    lines: List[str]
+
+    @ToTgt.annotate("Nasm")
+    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
+        return self.lines
+
+
+@dataclass
 class Label:
     id: int
     custom_name: Optional[str] = None
@@ -406,9 +415,12 @@ class FnDef(ToTgt):
 @dataclass
 class Comment(Instr):
     text: str
+    prefix: str = ";; "
 
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
-        return [f";;; {self.text}"]
+        return [
+            f";{self.prefix}{self.text}",
+        ]
 
 
 @dataclass
