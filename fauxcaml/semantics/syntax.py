@@ -224,7 +224,7 @@ class Call(AstNode):
             return self.to_lir_generalized(ctx)
 
     def to_lir_generalized(self, ctx: gen_ctx.NasmGenCtx) -> lir.Value:
-        ret = ctx.new_temp64()
+        ret = ctx.new_temp64() if self.type != typ.Unit else lir.Temp0()
         arg_tmp = self.arg.to_lir(ctx)
         fn_tmp = self.fn.to_lir(ctx)
         if not isinstance(fn_tmp, lir.Temp64):
