@@ -163,28 +163,3 @@ class EqI64(BinOpCall):
             f"mov {self.ret.to_nasm_val(ctx)}, rax",
         ]
 
-
-@dataclass
-class Exit(IntrinsicCall):
-    arg: lir.Value
-
-    @lir.ToTgt.annotate("Exit")
-    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
-        return [
-            f"mov rax, 60 ; code for `exit`",
-            f"mov rdi, {self.arg.to_nasm_val(ctx)}",
-            f"syscall",
-        ]
-
-
-@dataclass
-class PrintInt(IntrinsicCall):
-    arg: lir.Value
-
-    @lir.ToTgt.annotate("PrintInt")
-    def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
-        return [
-            f"mov rdi, _$print_int_fmt_str",
-            f"mov rsi, {self.arg.to_nasm_val(ctx)}",
-            f"call printf",
-        ]

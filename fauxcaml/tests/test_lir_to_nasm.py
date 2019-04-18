@@ -188,18 +188,3 @@ def test_iterative_factorial():
 
     assert build.exit_code_for(ctx) == 120
 
-
-@build.name_asm_file(__file__)
-def test_exit_intrinsic():
-    ctx = gen_ctx.NasmGenCtx()
-
-    t1 = ctx.new_temp64()
-
-    ctx.add_instrs([
-        intrinsics.Add(lir.I64(55), lir.I64(45), t1),
-        intrinsics.Exit(t1),
-        lir.Return(lir.I64(77)),
-    ])
-
-    assert build.exit_code_for(ctx) == 100
-
