@@ -81,7 +81,7 @@ class Value(AstNode, ABC):
     pass
 
 
-@dataclass(eq=True)
+@dataclass
 class Ident(Value):
     """
     An identifier.
@@ -116,7 +116,7 @@ class Ident(Value):
         return hash(self.name)
 
 
-@dataclass(eq=True)
+@dataclass
 class Const(Value):
     """
     A literal.
@@ -142,7 +142,7 @@ class Const(Value):
         return str(self.value)
 
 
-@dataclass(eq=True)
+@dataclass
 class Lambda(AstNode):
     """
     lambda param: body
@@ -172,7 +172,7 @@ class Lambda(AstNode):
         return self.body.captures() - {self.param}
 
 
-@dataclass(eq=True)
+@dataclass
 class Call(AstNode):
     """
     fn(arg)
@@ -239,7 +239,7 @@ class Call(AstNode):
         return self.fn.captures() | self.arg.captures()
 
 
-@dataclass(eq=True)
+@dataclass
 class If(AstNode):
     """
     if pred then yes else no
@@ -295,7 +295,7 @@ class If(AstNode):
         return self.pred.captures() | self.yes.captures() | self.no.captures()
 
 
-@dataclass(eq=True)
+@dataclass
 class Let(AstNode):
     """
     let left = right in body
@@ -359,7 +359,7 @@ class Let(AstNode):
         return (self.body.captures() | self.right.captures()) - {self.left}
 
 
-@dataclass(eq=True)
+@dataclass
 class TupleLit(AstNode):
     vals: typing.Tuple[AstNode, ...]
 
