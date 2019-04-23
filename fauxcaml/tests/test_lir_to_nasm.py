@@ -26,18 +26,29 @@ def test_create_closure():
 
 @build.name_asm_file(__file__)
 def test_adder_factory():
+    """
+    let adder x =
+        fun y ->
+            x + y
+    ;;
+    let plus77 = adder 77;;
+    exit (plus77 99);;
+    """
     ctx = gen_ctx.NasmGenCtx()
 
     with ctx.new_fn_def("$adder$closure") as (adder_closure_lbl, y):
-        x = ctx.new_temp64()
+        x_local = ctx.new_temp64()
         ctx.add_instrs([
-            lir.EnvLookup(0, x),
-            intrinsics.Add(x, y)
+            lir.EnvLookup(0, x_local),
+            intrinsics.Add(x_local, y)
         ])
 
     with ctx.new_fn_def("$adder") as (adder_lbl, x):
         ret = ctx.new_temp64()
         ctx.add_instrs([
+            # Close over `x` which is captured from the outer function.
+            # This instruction is the only thing in the body of `adder` and
+            # returns a closure which captures `x`.
             lir.CreateClosure(adder_closure_lbl, [x], ret),
             lir.Return(ret),
         ])
