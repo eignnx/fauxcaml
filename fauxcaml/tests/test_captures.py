@@ -111,8 +111,8 @@ def test_recursive_fn():
 
     assert if_.captures() == {equals, times, minus, n, fact}
 
-    # Decision: a `LetStmt` does NOT capture the name it defines, even if it is a recursive definition. (Common
-    # sense, I know, but the distinction mattered at one point.)
+    # Decision: a `LetStmt` does NOT capture the name it defines (`fact` in this case), even if it is a recursive
+    # definition. (Common sense, I know, but the distinction mattered when writing `LetStmt.to_lir`.)
     assert let_stmt.captures() == {equals, times, minus}
 
 

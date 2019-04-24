@@ -114,7 +114,7 @@ def test_recursive_factorial():
             else_block.as_instr(),
             *[
                 intrinsics.Sub(n, lir.I64(1), t0),
-                lir.EnvLookup(lir.EnvLookup.RECURSIVE_IDX, fact_rec),
+                lir.EnvLookup(lir.EnvLookup.RECURSIVE_INDEX, fact_rec),
                 lir.CallClosure(fact_rec, t0, t1),
                 intrinsics.Mul(n, t1, t2),
                 lir.Assign(ret, t2),
@@ -158,7 +158,7 @@ def test_iterative_factorial():
         ctx.add_instrs([
             lir.GetElementPtr(tup, index=0, stride=8, res=i),
             lir.GetElementPtr(tup, index=1, stride=8, res=acc),
-            lir.EnvLookup(lir.EnvLookup.RECURSIVE_IDX, env_n),
+            lir.EnvLookup(1, env_n),
             intrinsics.EqI64(i, env_n, cond),
             lir.IfFalse(cond, _else),
             *[
@@ -170,7 +170,7 @@ def test_iterative_factorial():
                 intrinsics.Add(i, lir.I64(1), i_plus_1),
                 intrinsics.Mul(i, acc, i_times_acc),
                 intrinsics.CreateTuple([i_plus_1, i_times_acc], next_tup),
-                lir.EnvLookup(1, env_iter),
+                lir.EnvLookup(lir.EnvLookup.RECURSIVE_INDEX, env_iter),
                 lir.CallClosure(env_iter, next_tup, ret)
             ],
             end_if.as_instr(),

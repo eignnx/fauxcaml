@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import functools
-import typing
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import Dict, Optional, Set, Callable, List, Tuple
 
 from fauxcaml.lir import gen_ctx, lir, intrinsics
 from fauxcaml.semantics import check
@@ -13,8 +13,8 @@ from fauxcaml.semantics import unifier_set
 
 class AstNode(ABC):
     def __init__(self):
-        self._type: typing.Optional[typ.Type] = None
-        self._unifiers: typing.Optional[unifier_set.UnifierSet] = None
+        self._type: Optional[typ.Type] = None
+        self._unifiers: Optional[unifier_set.UnifierSet] = None
 
     @abstractmethod
     def infer_type(self, checker: check.Checker) -> typ.Type:
@@ -25,7 +25,7 @@ class AstNode(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def captures(self) -> typing.Set[Ident]:
+    def captures(self) -> Set[Ident]:
         """
         Returns a set of all captured variables ie those variables that are used
         in the current `AstNode` (`self`), but not defined in the current
@@ -35,7 +35,7 @@ class AstNode(ABC):
         pass
 
     @staticmethod
-    def cache_type(fn: typing.Callable[[AstNode, check.Checker], typ.Type]):
+    def cache_type(fn: Callable[[AstNode, check.Checker], typ.Type]):
         """
         Decorator for use on `AstNode.infer_type`. It stores the return value
         of `infer_type` in the field `self._type`, and stores the `Checker`'s
@@ -101,12 +101,13 @@ class Ident(Value):
             ctx.add_instr(
                 lir.EnvLookup(
                     index=ctx.captured_names[self.name],
-                    res=tmp
+                    res=tmp,
+                    name=self.name
                 )
             )
             return tmp
 
-    def captures(self) -> typing.Set[Ident]:
+    def captures(self) -> Set[Ident]:
         return {self}
 
     def __str__(self):
@@ -135,7 +136,7 @@ class Const(Value):
             return lir.I64(self.value)
         raise NotImplementedError
 
-    def captures(self) -> typing.Set[Ident]:
+    def captures(self) -> Set[Ident]:
         return set()
 
     def __str__(self):
@@ -168,7 +169,7 @@ class Lambda(AstNode):
     def to_lir(self, ctx: gen_ctx.NasmGenCtx) -> lir.Value:
         raise NotImplementedError
 
-    def captures(self) -> typing.Set[Ident]:
+    def captures(self) -> Set[Ident]:
         return self.body.captures() - {self.param}
 
 
@@ -200,30 +201,6 @@ class Call(AstNode):
         return checker.unifiers.concretize(beta)
 
     def to_lir(self, ctx: gen_ctx.NasmGenCtx) -> lir.Value:
-        if isinstance(self.fn, Ident):
-
-            # We must first check to see if the instruction is one of the
-            # built-ins. These will be handled specially.
-
-            if self.fn.name in intrinsics.BinOpCall.operations:
-                ret = ctx.new_temp64()
-                assert isinstance(self.arg, TupleLit)
-                assert len(self.arg.vals) == 2
-                arg1, arg2 = self.arg.vals
-                instr = intrinsics.BinOpCall.dispatch_on(
-                    op=self.fn.name,
-                    arg1=arg1.to_lir(ctx),
-                    arg2=arg2.to_lir(ctx),
-                    ret=ret,
-                )
-                ctx.add_instr(instr)
-                return ret
-            else:
-                return self.to_lir_generalized(ctx)
-        else:
-            return self.to_lir_generalized(ctx)
-
-    def to_lir_generalized(self, ctx: gen_ctx.NasmGenCtx) -> lir.Value:
         ret = ctx.new_temp64() if self.type != typ.Unit else lir.Temp0()
         arg_tmp = self.arg.to_lir(ctx)
         fn_tmp = self.fn.to_lir(ctx)
@@ -235,7 +212,7 @@ class Call(AstNode):
         ctx.add_instr(instr)
         return ret
 
-    def captures(self) -> typing.Set[Ident]:
+    def captures(self) -> Set[Ident]:
         return self.fn.captures() | self.arg.captures()
 
 
@@ -291,7 +268,7 @@ class If(AstNode):
 
         return ret
 
-    def captures(self) -> typing.Set[Ident]:
+    def captures(self) -> Set[Ident]:
         return self.pred.captures() | self.yes.captures() | self.no.captures()
 
 
@@ -332,7 +309,7 @@ class Let(AstNode):
     def to_lir(self, ctx: gen_ctx.NasmGenCtx) -> lir.Value:
         if isinstance(self.right, Lambda):
 
-            with ctx.new_fn_def(self.left.name, self.recursive) as (lbl, param_tmp):
+            with ctx.new_fn_def(self.left.name) as (lbl, param_tmp):
                 param_name = self.right.param.name
                 ctx.local_names[param_name] = param_tmp
                 ret = self.right.body.to_lir(ctx)
@@ -355,13 +332,13 @@ class Let(AstNode):
 
         return self.body.to_lir(ctx)
 
-    def captures(self) -> typing.Set[Ident]:
+    def captures(self) -> Set[Ident]:
         return (self.body.captures() | self.right.captures()) - {self.left}
 
 
 @dataclass
 class TupleLit(AstNode):
-    vals: typing.Tuple[AstNode, ...]
+    vals: Tuple[AstNode, ...]
 
     def __init__(self, *vals):
         super().__init__()
@@ -385,7 +362,7 @@ class TupleLit(AstNode):
 
         return res
 
-    def captures(self) -> typing.Set[Ident]:
+    def captures(self) -> Set[Ident]:
         return {  # The poor-lang's flatmap.
             capture
             for val in self.vals
@@ -429,7 +406,20 @@ class LetStmt(AstNode):
     def to_lir(self, ctx: gen_ctx.NasmGenCtx) -> lir.Temp:
         if isinstance(self.right, Lambda):
 
-            with ctx.new_fn_def(self.left.name, self.recursive) as (lbl, param_tmp):
+            # NOTE: This list specifically does NOT include the recursively defined identifier (if the `let` is
+            # recursive). For instance, if this LetStmt was like `let rec f x = ... f ... ;;`, the ident `f` would
+            # NOT be included here. This is because `CreateClosure` must assign recursive bindings internally,
+            # and not based on the list of captured values.
+            capture_list = list(self.captures())
+            capture_values = [ident.to_lir(ctx) for ident in capture_list]
+
+            # HOWEVER: The recursively bound identifier will be included AT THE FRONT of the capture list when
+            # constructing a `Dict[str, int]` so that code can be generated for `self.body`. These `int` values are
+            # indices and will be used by `EnvLookup` instructions.
+            capture_list_with_rec = ([self.left] if self.recursive else []) + capture_list
+            capture_indices: Dict[str, int] = {ident.name: index for index, ident in enumerate(capture_list_with_rec)}
+
+            with ctx.new_fn_def(self.left.name, capture_indices) as (lbl, param_tmp):
                 param_name = self.right.param.name
                 ctx.local_names[param_name] = param_tmp
                 ret = self.right.body.to_lir(ctx)
@@ -441,7 +431,7 @@ class LetStmt(AstNode):
             ctx.add_instr(
                 lir.CreateClosure(
                     fn_lbl=lbl,
-                    captures=[],
+                    captures=capture_values,
                     ret=left_tmp,
                     recursive=self.recursive
                 )
@@ -452,13 +442,13 @@ class LetStmt(AstNode):
 
         return lir.Temp0()
 
-    def captures(self) -> typing.Set[Ident]:
+    def captures(self) -> Set[Ident]:
         return self.right.captures() - {self.left}
 
 
 @dataclass
 class TopLevelStmts(AstNode):
-    stmts: typing.List[AstNode]
+    stmts: List[AstNode]
 
     @AstNode.cache_type
     def infer_type(self, checker: check.Checker) -> typ.Type:
@@ -471,7 +461,7 @@ class TopLevelStmts(AstNode):
             stmt.to_lir(ctx)
         return lir.Temp0()
 
-    def captures(self) -> typing.Set[Ident]:
+    def captures(self) -> Set[Ident]:
         return {  # The poor-lang's flatmap.
             capture
             for stmt in self.stmts

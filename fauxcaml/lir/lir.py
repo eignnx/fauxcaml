@@ -238,10 +238,11 @@ class SetElementPtr(Instr):
 class EnvLookup(Instr):
     index: int
     res: Temp64
+    name: Optional[str] = None  # The name that is being looked up.
 
-    RECURSIVE_IDX: ClassVar[int] = 0
+    RECURSIVE_INDEX: ClassVar[int] = 0
 
-    @ToTgt.annotate("EnvLookup", index="index")
+    @ToTgt.annotate("EnvLookup", name="name if name else ''", index="index")
     def to_nasm(self, ctx: gen_ctx.NasmGenCtx) -> List[str]:
         return GetElementPtr(
             ptr=ctx.current_fn.env,
@@ -278,7 +279,11 @@ class CallClosure(Instr):
 @dataclass
 class CreateClosure(Instr):
     fn_lbl: Label
+
+    # It is the creator's responsibility to generate the code that provides these values. This may require
+    # environment lookups.
     captures: List[Value]
+
     ret: Temp64
     recursive: bool = False
 
@@ -307,30 +312,30 @@ class CreateClosure(Instr):
         # the value is put into the struct.
         offset = self.fn_lbl.as_value().size()  # Skip stored fn label.
 
+        # If the function is recursive, the pointer to the closure must be
+        # stored in the environment.
+        if self.recursive:
+            asm.append(
+                f"mov [r8{offset:+}], r8 ; Store recursive pointer to closure."
+            )
+            offset += 8
+
         if self.captures:
             asm.append("; <ConstructEnvironment>")
 
             for val in self.captures:
                 asm += [
-                    # Get each captured value, put in `rax`
-                    f"mov rax, {val.to_nasm_val(ctx)}",
-                    
+                    # Get each captured value, put in `rax.`
+                    f"mov rax, {val.to_nasm_val(ctx)} ; Get the captured value, put in `rax`.",
+
                     # Store the captured value in the closure struct.
-                    f"mov QWORD [r8{offset:+}], rax",
+                    f"mov QWORD [r8{offset:+}], rax ; Store the captured value in the closure struct.",
                 ]
 
                 # Increment the offset by the size of the thing that was stored.
                 offset += val.size()
 
             asm.append("; </ConstructEnvironment>")
-
-        # If the function is recursive, the pointer to the closure must be
-        # stored in the environment too.
-        if self.recursive:
-            asm.append(
-                f"mov [r8{offset:+}], r8"
-            )
-            offset += 8
 
         asm.append(
             # Store the closure ptr in the result temporary.

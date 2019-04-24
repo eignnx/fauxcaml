@@ -19,7 +19,7 @@ class NasmGenCtx:
         self.fns: List[lir.FnDef] = [self.current_fn]
 
     def create_main_fn_def(self):
-        lbl = self.new_label("main")
+        lbl = self.new_label("main")  # NOTE: This must be exactly "main" for gcc.
         param = lir.Temp0()
         env = lir.Temp0()
         return lir.FnDef(lbl, param, env)
@@ -40,12 +40,10 @@ class NasmGenCtx:
 
     @contextlib.contextmanager
     def inside_main(self):
-        old_fn_def = self.current_fn
-        self.current_fn = self.main_fn_def
-        old_local_names = self.local_names
-        self.local_names = self.main_local_names
-        old_captured_names = self.captured_names
-        self.captured_names = {}  # TODO: What to put here?
+        # READER BE AWARE: `a, b = b, a` indicates a swap.
+        self.current_fn, old_fn_def = self.main_fn_def, self.current_fn
+        self.local_names, old_local_names = self.main_local_names, self.local_names
+        self.captured_names, old_captured_names = {}, self.captured_names
         yield
         self.captured_names = old_captured_names
         self.local_names = old_local_names
@@ -58,7 +56,7 @@ class NasmGenCtx:
             fn_lbl_name: Optional[str] = None,
             recursive: bool = False
     ):
-        with self.new_fn_def(fn_lbl_name, recursive=recursive) as (lbl, param):
+        with self.new_fn_def(fn_lbl_name) as (lbl, param):
             yield (lbl, param)
 
         with self.inside_main():
@@ -74,17 +72,20 @@ class NasmGenCtx:
             )
 
     @contextlib.contextmanager
-    def new_fn_def(self, custom_fn_name: Optional[str] = None, recursive: bool = False):
-        old_fn_def = self.current_fn
+    def new_fn_def(
+            self,
+            custom_fn_name: Optional[str] = None,
+            captures: Dict[str, int] = None
+    ):
+        captures = dict() if captures is None else captures
         new_fn_label = self.new_label(custom_fn_name)
-        self.current_fn = lir.FnDef(new_fn_label)
+
+        # READER BE AWARE: `a, b = b, a` indicates a swap.
+        self.current_fn, old_fn_def = lir.FnDef(new_fn_label), self.current_fn
+        self.local_names, old_local_names = dict(), self.local_names
+        self.captured_names, old_captured_names = captures, self.captured_names
+
         self.fns.append(self.current_fn)
-        old_local_names = self.local_names
-        self.local_names = dict()
-        old_captured_names = self.captured_names
-        self.captured_names = {  # TODO: Correct to forget about outer captures?
-            custom_fn_name: lir.EnvLookup.RECURSIVE_IDX
-        } if recursive else dict()
 
         yield (new_fn_label, self.current_fn.param)
 
