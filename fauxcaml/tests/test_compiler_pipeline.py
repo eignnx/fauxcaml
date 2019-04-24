@@ -53,6 +53,26 @@ def test_two_parameter_function():
 
 
 @build.name_asm_file(__file__)
+def test_three_parameter_function():
+    assert build.exit_code_for("""
+        let plus x y z =
+            x + y + z;;
+        exit (plus 100 50 25);;
+    """) == 175
+
+
+@build.name_asm_file(__file__)
+def test_adder_factory():
+    assert build.exit_code_for("""
+        let adder x y =
+            x + y
+        ;;
+        let plus77 = adder 77;;
+        exit (plus77 99);;
+    """) == 77 + 99
+
+
+@build.name_asm_file(__file__)
 def test_closure_capture():
     assert build.exit_code_for("""
         let y = 10;;

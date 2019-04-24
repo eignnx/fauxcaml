@@ -167,7 +167,31 @@ class Lambda(AstNode):
         return typ.Fn(arg_type, body_type)
 
     def to_lir(self, ctx: gen_ctx.NasmGenCtx) -> lir.Value:
-        raise NotImplementedError
+        capture_list = list(self.captures())
+        capture_values = [ident.to_lir(ctx) for ident in capture_list]
+
+        # These `int` values are indices and will be used by `EnvLookup` instructions.
+        capture_indices: Dict[str, int] = {ident.name: index for index, ident in enumerate(capture_list)}
+
+        lambda_name = f"lambda${id(self):X}"  # TODO: Is this safe?
+        with ctx.new_fn_def(lambda_name, capture_indices) as (lbl, param_tmp):
+            param_name = self.param.name
+            ctx.local_names[param_name] = param_tmp
+            ret = self.body.to_lir(ctx)
+            ctx.add_instr(lir.Return(ret))
+
+        closure_tmp = ctx.new_temp64()
+
+        ctx.add_instr(
+            lir.CreateClosure(
+                fn_lbl=lbl,
+                captures=capture_values,
+                ret=closure_tmp,
+                recursive=False,  # ASSERTION: No lambda in this context is recursive.
+            )
+        )
+
+        return closure_tmp
 
     def captures(self) -> Set[Ident]:
         return self.body.captures() - {self.param}
