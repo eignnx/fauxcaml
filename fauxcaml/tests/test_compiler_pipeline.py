@@ -43,7 +43,6 @@ def test_global_function_definition():
     """) == 101
 
 
-@pytest.mark.xfail
 @build.name_asm_file(__file__)
 def test_two_parameter_function():
     assert build.exit_code_for("""
@@ -51,6 +50,17 @@ def test_two_parameter_function():
             x + y;;
         exit (plus 100 50);;
     """) == 150
+
+
+@build.name_asm_file(__file__)
+def test_closure_capture():
+    assert build.exit_code_for("""
+        let y = 10;;
+        let f x =
+            x + y
+        ;;
+        exit (f 20);;
+    """) == 30
 
 
 @build.name_asm_file(__file__)
@@ -111,7 +121,6 @@ def test_reassigning_exit():
     """) == 12
 
 
-@pytest.mark.xfail
 @build.name_asm_file(__file__)
 def test_wrapping_exit():
     assert build.exit_code_for("""
