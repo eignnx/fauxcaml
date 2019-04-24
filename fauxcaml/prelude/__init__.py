@@ -23,11 +23,11 @@ def add_to_ctx(ctx: gen_ctx.NasmGenCtx):
             f"call printf",
         ]))
 
-    new_curried_bin_op(ctx, "+", "_$plus", intrinsics.Add)
-    new_curried_bin_op(ctx, "-", "_$minus", intrinsics.Sub)
-    new_curried_bin_op(ctx, "*", "_$times", intrinsics.Mul)
-    new_curried_bin_op(ctx, "div", "_$divide", intrinsics.Div)
-    new_curried_bin_op(ctx, "mod", "_$modulo", intrinsics.Mod)
+    new_curried_bin_op(ctx, "+", "_$int_add", intrinsics.Add)
+    new_curried_bin_op(ctx, "-", "_$int_subtract", intrinsics.Sub)
+    new_curried_bin_op(ctx, "*", "_$int_multiply", intrinsics.Mul)
+    new_curried_bin_op(ctx, "div", "_$int_divide", intrinsics.Div)
+    new_curried_bin_op(ctx, "mod", "_$int_modulo", intrinsics.Mod)
     new_curried_bin_op(ctx, "=", "_$int_is_equal", intrinsics.EqI64)
 
 
@@ -38,7 +38,7 @@ def new_curried_bin_op(ctx: gen_ctx.NasmGenCtx, name: str, label_name: str, oper
             x_local = ctx.new_temp64()
             ret = ctx.new_temp64()
             ctx.add_instrs([
-                lir.EnvLookup(0, x_local),
+                lir.EnvLookup(0, x_local, name="$first_param"),
                 operation(x_local, y, ret),
                 lir.Return(ret),
             ])
