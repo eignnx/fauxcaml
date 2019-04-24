@@ -110,6 +110,33 @@ def test_factorial():
 
 
 @build.name_asm_file(__file__)
+def test_factorial_without_let_stmt():
+    assert build.exit_code_for("""
+        let rec fact n =
+            if n = 1
+            then 1
+            else n * (fact (n - 1))
+        in
+            exit (fact 5);;
+    """) == 120
+
+
+@build.name_asm_file(__file__)
+def test_iterative_factorial():
+    assert build.exit_code_for("""
+        let fact n =
+            let rec iter i acc =
+                if i = n
+                then n * acc
+                else iter (i + 1) (acc * i)
+            in
+                iter 1 1
+        ;;
+        exit (fact 5);;
+    """) == 120
+
+
+@build.name_asm_file(__file__)
 def test_nested_let_expr():
     assert build.exit_code_for("""
         let my_main x =

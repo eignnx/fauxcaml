@@ -333,7 +333,20 @@ class Let(AstNode):
     def to_lir(self, ctx: gen_ctx.NasmGenCtx) -> lir.Value:
         if isinstance(self.right, Lambda):
 
-            with ctx.new_fn_def(self.left.name) as (lbl, param_tmp):
+            # NOTE: This list specifically does NOT include the recursively defined identifier (if the `let` is
+            # recursive). For instance, if this LetStmt was like `let rec f x = ... f ... ;;`, the ident `f` would
+            # NOT be included here. This is because `CreateClosure` must assign recursive bindings internally,
+            # and not based on the list of captured values.
+            capture_list = list(self.captures())
+            capture_values = [ident.to_lir(ctx) for ident in capture_list]
+
+            # HOWEVER: The recursively bound identifier will be included AT THE FRONT of the capture list when
+            # constructing a `Dict[str, int]` so that code can be generated for `self.body`. These `int` values are
+            # indices and will be used by `EnvLookup` instructions.
+            capture_list_with_rec = ([self.left] if self.recursive else []) + capture_list
+            capture_indices: Dict[str, int] = {ident.name: index for index, ident in enumerate(capture_list_with_rec)}
+
+            with ctx.new_fn_def(self.left.name, capture_indices) as (lbl, param_tmp):
                 param_name = self.right.param.name
                 ctx.local_names[param_name] = param_tmp
                 ret = self.right.body.to_lir(ctx)
@@ -345,9 +358,9 @@ class Let(AstNode):
             ctx.add_instr(
                 lir.CreateClosure(
                     fn_lbl=lbl,
-                    captures=[],
+                    captures=capture_values,
                     ret=left_tmp,
-                    recursive=self.recursive,
+                    recursive=self.recursive
                 )
             )
         else:
