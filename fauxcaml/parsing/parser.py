@@ -171,7 +171,7 @@ def paren_expr(s):
 def bin_op_expr(s):
     expr1, op, expr2 = s
     ident = syntax.Ident(op.value)
-    return syntax.Call(ident, syntax.TupleLit(expr1, expr2))
+    return syntax.Call(syntax.Call(ident, expr1), expr2)
 
 
 parser = pg.build()

@@ -1,4 +1,5 @@
 from fauxcaml.lir import gen_ctx, lir
+from fauxcaml.lir import intrinsics
 
 
 def add_to_ctx(ctx: gen_ctx.NasmGenCtx):
@@ -21,3 +22,30 @@ def add_to_ctx(ctx: gen_ctx.NasmGenCtx):
             f"mov rsi, {param.to_nasm_val(ctx)}",
             f"call printf",
         ]))
+
+    new_curried_bin_op(ctx, "+", "_$plus", intrinsics.Add)
+    new_curried_bin_op(ctx, "-", "_$minus", intrinsics.Sub)
+    new_curried_bin_op(ctx, "*", "_$times", intrinsics.Mul)
+    new_curried_bin_op(ctx, "div", "_$divide", intrinsics.Div)
+    new_curried_bin_op(ctx, "mod", "_$modulo", intrinsics.Mod)
+    new_curried_bin_op(ctx, "=", "_$int_is_equal", intrinsics.EqI64)
+
+
+def new_curried_bin_op(ctx: gen_ctx.NasmGenCtx, name: str, label_name: str, operation):
+    with ctx.new_prelude_fn_def(name, label_name) as (lbl, x):
+
+        with ctx.new_prelude_fn_def(name + "$arg2", label_name + "$arg2") as (param_2_lbl, y):
+            x_local = ctx.new_temp64()
+            ret = ctx.new_temp64()
+            ctx.add_instrs([
+                lir.EnvLookup(0, x_local),
+                operation(x_local, y, ret),
+                lir.Return(ret),
+            ])
+
+        closure_ret = ctx.new_temp64()
+        ctx.add_instrs([
+            lir.CreateClosure(param_2_lbl, [x], closure_ret),
+            lir.Return(closure_ret),
+        ])
+
