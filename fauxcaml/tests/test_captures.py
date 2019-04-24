@@ -111,6 +111,10 @@ def test_recursive_fn():
 
     assert if_.captures() == {equals, times, minus, n, fact}
 
+    # Decision: a `LetStmt` does NOT capture the name it defines, even if it is a recursive definition. (Common
+    # sense, I know, but the distinction mattered at one point.)
+    assert let_stmt.captures() == {equals, times, minus}
+
 
 def test_multi_arg_fn():
     stmts = parsing.parse("""
