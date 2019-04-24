@@ -102,7 +102,7 @@ def test_nested_let_expr():
     """) == 3
 
 
-@pytest.mark.xfail
+@pytest.mark.xfail(reason="Stdout capture inside tests not yet impl'd.")
 @build.name_asm_file(__file__)
 def test_print_int(capsys):
     assert build.stdout_log_for("""
