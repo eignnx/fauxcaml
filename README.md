@@ -121,6 +121,5 @@ The `./fauxcaml` directory defines a top-level package. It contains the followin
   * `std_env.py`: Defines **type signatures** for built-in functions
   * `unifier_set.py`: A class used in type checking for keeping track of which type variables have already been unified (shown to be equivalent). Derived from `DisjointSet` defined in `disjoint_set.py`.
 * `fauxcaml.lir`: Defines the *low-level intermediate representation*. This acts as an API for programmatically constructing assembly files.
-* `fauxcaml.hir`: Currently not used, but may be used as a layer between `lir` and the AST.
 * `fauxcaml.build`: Contains high-level functions for compiling, assembling, and linking. 
 * `fauxcaml.utils`: Random utility functions go here.
