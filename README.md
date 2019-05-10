@@ -1,5 +1,4 @@
 # fauxcaml
-> A (not so great) Python implementation of OCaml.
 
 The `fauxcaml` compiler can convert simple OCaml code to 86x-64 ([NASM](https://en.wikipedia.org/wiki/Netwide_Assembler) flavored) assembly. Fauxcaml uses the type checking algorithm described in Luca Cardelli's 1988 paper [Basic Polymorphic Typechecking](http://lucacardelli.name/Papers/BasicTypechecking.pdf) and explained in [Bodil Stokke's excellent talk from 2018](https://www.youtube.com/watch?v=8coUL8G1lFA).
 
@@ -8,7 +7,7 @@ The `fauxcaml` compiler can convert simple OCaml code to 86x-64 ([NASM](https://
 The codebase uses recent features of Python quite extensively ([dataclasses](https://docs.python.org/3/library/dataclasses.html), [f-strings](https://www.python.org/dev/peps/pep-0498/), [type annotations](https://docs.python.org/3/library/typing.html)), so your system must have at least Python 3.7 installed.
 
 ### Ensure Python 3.7 Installed
-Python 3.7 must be installed at the following location: `/usr/local/bin/python3.7`. Test to make sure this is the case.
+For now, Python 3.7 must be installed at the following location: `/usr/local/bin/python3.7`. Test to make sure this is the case.
 
 ```shell
 $ if [ -f /usr/local/bin/python3.7 ]; then echo good; else echo bad; fi
