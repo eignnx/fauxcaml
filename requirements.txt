@@ -3,7 +3,7 @@ atomicwrites==1.3.0
 attrs==18.2.0
 more-itertools==5.0.0
 pluggy==0.8.1
-py==1.7.0
+py>=1.10.0
 pytest==4.2.0
 rply==0.7.7
 six==1.12.0
